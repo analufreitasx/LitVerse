@@ -147,9 +147,9 @@ O LitVerse nasceu de uma frustração real: encontrar o próximo livro certo ain
 |---|---|
 | **Docker + Docker Compose** | Containerização do ambiente local |
 | **EAS Build** | Build e distribuição do app nas lojas |
-| **Expo Auth Session** | 5.x | Fluxo OAuth 2.0 nativo para login com Google e Apple no mobile
-| **Expo Camera** | 15.x | 	Leitura de ISBN por câmera para adicionar livros à biblioteca pessoa
-| **Jest + Testing Library** | 29.x / 12.x | Testes unitários e de componentes React Native
+| **Expo Auth Session** | Fluxo OAuth 2.0 nativo para login com Google e Apple no mobile
+| **Expo Camera** | Leitura de ISBN por câmera para adicionar livros à biblioteca pessoa
+| **Jest + Testing Library** | Testes unitários e de componentes React Native
 | **SonarQube** | Análise de qualidade de código |
 
 ---
