@@ -150,10 +150,24 @@ O LitVerse nasceu de uma frustração real: encontrar o próximo livro certo ain
 
 
 **Decisões arquiteturais principais:**
-
+- **Monólito modular**: Ponto de partida escolhido pela menor complexidade operacional. Os módulos internos são bem delimitados, facilitando uma futura migração para microsserviços caso necessário.
+- **Motor de recomendação isolado**:  Único serviço extraído do monólito desde o início, justificado pelo seu perfil computacional intensivo e pela dependência natural do ecossistema Python.
+- **Comunicação REST + assíncrona**: A comunicação entre o app e o backend ocorre de forma síncrona via REST. Entre o monólito e o motor de recomendação, a comunicação é assíncrona via SQS.
+- **Cache com Redis**: Recomendações pré-calculadas e sessões de usuário são armazenadas em cache, evitando acionamentos desnecessários do motor a cada requisição.
+- **Autenticação JWT + OAuth 2.0**: Autenticação stateless, sem armazenamento de credenciais no servidor, com suporte a login social via Google e Apple.
+- **PostgreSQL como banco principal**: Modelagem relacional cobrindo as entidades centrais do sistema: usuários, livros, avaliações, metas e comunidades.
 
 **Infraestrutura (diagrama de implantação):**
 
+- **React Native + Expo** — Base de código única para iOS e Android, com acesso simplificado a recursos nativos como câmera e notificações push.
+- **Zustand** — Gerenciamento de estado leve no cliente, com cache local dos dados já carregados para reduzir requisições redundantes.
+- **Node.js + Express** — Backend principal responsável por expor a API REST para os módulos core do sistema.
+- **FastAPI (Python)** — Serviço de recomendação implementado como container independente, aproveitando o ecossistema científico do Python.
+- **Firebase FCM + Expo Notifications** — FCM atua como transportador das notificações push; Expo Notifications funciona como camada de abstração no cliente.
+- **Elastic Beanstalk** — Hospedagem do monólito Node.js com auto scaling e balanceamento de carga gerenciados pela AWS.
+- **ECS Fargate** — Hospedagem do serviço de recomendação em container isolado, com alocação de recursos independente do monólito.
+- **RDS (PostgreSQL)** — Banco de dados gerenciado com configuração Multi-AZ e réplicas de leitura para alta disponibilidade.
+- **Amazon SQS** — Fila gerenciada para comunicação assíncrona entre o monólito e o motor de recomendação.
 
 ### Diagramas
 
