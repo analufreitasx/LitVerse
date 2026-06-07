@@ -93,10 +93,6 @@ O LitVerse nasceu de uma frustração real: encontrar o próximo livro certo ain
 - **Clubes do livro:** Criação de grupos de leitura com timeline compartilhada e discussões por capítulo.
 - **Listas públicas:** Curadoria aberta — "Melhores distopias", "Leituras para o metrô", criadas por qualquer usuário.
 
-### 🏆 Gamificação Literária
-
-- **Conquistas colecionáveis:** Marcos como primeiro livro registrado, 10 gêneros diferentes lidos, maratona de fim de semana.
-- **Badges de leitor:** Identidade visual que evolui com o histórico — do Leitor Iniciante ao Explorador Literário.
 
 ### 🔔 Notificações e Lembretes
 
