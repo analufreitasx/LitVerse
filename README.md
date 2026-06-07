@@ -131,7 +131,7 @@ O LitVerse nasceu de uma frustração real: encontrar o próximo livro certo ain
 | **Redis** | 7.x | Cache de recomendações pré-calculadas, sessões, filas e rate limiting |
 | **JWT + Passport** | — | Autenticação e autorização |
 | **Firebase Cloud Messaging** | — | Push notifications remotas |
-| **BullMQ** | — | Filas de processamento assíncrono (missões, notificações) |
+| **Amazon SQS** | — | Filas de processamento assíncrono (missões, notificações) |
 
 ### ⚙️ Infraestrutura & DevOps
 
