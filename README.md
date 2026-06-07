@@ -91,15 +91,11 @@ O LitVerse nasceu de uma frustração real: encontrar o próximo livro certo ain
 ### 💬 Comunidade Literária
 
 - **Clubes do livro:** Criação de grupos de leitura com timeline compartilhada e discussões por capítulo.
-- **Resenhas sociais:** Curtir, comentar e salvar resenhas de outros leitores.
 - **Listas públicas:** Curadoria aberta — "Melhores distopias", "Leituras para o metrô", criadas por qualquer usuário.
-- **Perfil público:** Estante visível, resenhas e estatísticas de leitura para quem quiser compartilhar.
 
 ### 🏆 Gamificação Literária
 
-- **Sistema de XP:** Ganho por livros concluídos, resenhas escritas, metas atingidas e participação em clubes.
 - **Conquistas colecionáveis:** Marcos como primeiro livro registrado, 10 gêneros diferentes lidos, maratona de fim de semana.
-- **Ranking de clubes:** Placar interno para grupos de leitura que quiserem competir de forma leve.
 - **Badges de leitor:** Identidade visual que evolui com o histórico — do Leitor Iniciante ao Explorador Literário.
 
 ### 🔔 Notificações e Lembretes
