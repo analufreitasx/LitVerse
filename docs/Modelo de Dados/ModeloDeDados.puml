@@ -1,0 +1,421 @@
+@startuml LitVerse_ModeloEntidadeRelacionamento
+
+title Modelo Entidade-Relacionamento (E-R) - LitVerse
+
+' ─────────────────────────────────────────────
+' ESTILO VISUAL
+' ─────────────────────────────────────────────
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 55
+
+skinparam entity {
+  BackgroundColor #F0EBFF
+  BorderColor     #7C5CBF
+  FontSize        12
+  FontStyle       bold
+  AttributeFontSize 11
+}
+
+skinparam ArrowColor     #7C5CBF
+skinparam ArrowThickness 1.5
+
+hide circle
+hide methods
+
+' ─────────────────────────────────────────────
+' ENTIDADES
+' ─────────────────────────────────────────────
+
+entity "Usuario" as Usuario {
+  * id : UUID «PK»
+  --
+  nome              : String
+  email             : String
+  senhaHash         : String
+  perfil            : PerfilUsuario
+  status            : StatusConta
+  motivoSuspensao   : String
+  perfilConfigurado : Boolean
+  criadoEm         : DateTime
+  atualizadoEm     : DateTime
+}
+
+entity "PreferenciasLeitura" as Preferencias {
+  * id : UUID «PK»
+  --
+  usuarioId         : UUID «FK»
+  generosPreferidos : String[]
+  idiomasPreferidos : String[]
+  autoresFavoritos  : String[]
+  moodsDeLeitura    : MoodLeitura[]
+  metaAnualLivros   : Int
+  tamanhoPreferido  : TamanhoLivro
+  criadoEm         : DateTime
+  atualizadoEm     : DateTime
+}
+
+entity "ConfiguracaoNotificacao" as ConfigNotif {
+  * id : UUID «PK»
+  --
+  usuarioId          : UUID «FK»
+  lembreteAtivado    : Boolean
+  horarioLembrete    : Time
+  resumoSemanal      : Boolean
+  alertasClube       : Boolean
+  novosLancamentos   : Boolean
+  atualizadoEm      : DateTime
+}
+
+entity "DispositivoUsuario" as Dispositivo {
+  * id : UUID «PK»
+  --
+  usuarioId  : UUID «FK»
+  fcmToken   : String
+  plataforma : String
+  ativadoEm : DateTime
+}
+
+entity "ImportacaoJob" as ImportacaoJob {
+  * id : UUID «PK»
+  --
+  usuarioId       : UUID «FK»
+  status          : StatusImportacao
+  totalRegistros  : Int
+  importados      : Int
+  ignorados       : Int
+  erros           : Int
+  criadoEm       : DateTime
+  atualizadoEm   : DateTime
+}
+
+entity "LogAcaoAdmin" as LogAcaoAdmin {
+  * id : UUID «PK»
+  --
+  adminId      : UUID «FK»
+  usuarioId    : UUID «FK»
+  acao         : AcaoAdmin
+  detalhe      : String
+  realizadaEm : DateTime
+}
+
+entity "Notificacao" as Notificacao {
+  * id : UUID «PK»
+  --
+  usuarioId : UUID «FK»
+  tipo      : TipoNotificacao
+  titulo    : String
+  corpo     : Text
+  lida      : Boolean
+  dados     : JSON
+  criadaEm : DateTime
+}
+
+entity "Estante" as Estante {
+  * id : UUID «PK»
+  --
+  usuarioId    : UUID «FK»
+  criadaEm    : DateTime
+  atualizadaEm : DateTime
+}
+
+entity "EstanteItem" as EstanteItem {
+  * id : UUID «PK»
+  --
+  estanteId     : UUID «FK»
+  livroId       : UUID «FK»
+  status        : StatusLeitura
+  progresso     : Int
+  dataInicio    : Date
+  dataConclusao : Date
+  avaliacao     : Float
+  criadoEm     : DateTime
+  atualizadoEm : DateTime
+}
+
+entity "HistoricoProgressoLeitura" as HistoricoProgresso {
+  * id : UUID «PK»
+  --
+  estanteItemId  : UUID «FK»
+  paginaAnterior : Int
+  novaPagina     : Int
+  statusAnterior : StatusLeitura
+  novoStatus     : StatusLeitura
+  registradoEm  : DateTime
+}
+
+entity "RegistroDiario" as RegistroDiario {
+  * id : UUID «PK»
+  --
+  usuarioId    : UUID «FK»
+  livroId      : UUID «FK»
+  paginasLidas : Int
+  dataRegistro : Date
+  nota         : String
+  criadoEm    : DateTime
+}
+
+entity "StreakLeitura" as Streak {
+  * id : UUID «PK»
+  --
+  usuarioId          : UUID «FK»
+  sequenciaAtual     : Int
+  maiorSequencia     : Int
+  ultimoRegistro     : Date
+  freezesDisponiveis : Int
+  freezesUsados      : Int
+  atualizadaEm      : DateTime
+}
+
+entity "MetaLeitura" as Meta {
+  * id : UUID «PK»
+  --
+  usuarioId    : UUID «FK»
+  titulo       : String
+  tipo         : TipoMeta
+  status       : StatusMeta
+  valorAlvo    : Int
+  valorAtual   : Int
+  generoAlvo   : String
+  dataInicio   : Date
+  dataFim      : Date
+  criadaEm    : DateTime
+  atualizadaEm : DateTime
+}
+
+entity "RegistroProgressoMeta" as ProgressoMeta {
+  * id : UUID «PK»
+  --
+  metaId        : UUID «FK»
+  valorAnterior : Int
+  novoValor     : Int
+  registradoEm : DateTime
+}
+
+entity "Avaliacao" as Avaliacao {
+  * id : UUID «PK»
+  --
+  usuarioId    : UUID «FK»
+  livroId      : UUID «FK»
+  nota         : Float
+  tags         : String[]
+  criadoEm    : DateTime
+  atualizadoEm : DateTime
+}
+
+entity "Resenha" as Resenha {
+  * id : UUID «PK»
+  --
+  avaliacaoId  : UUID «FK»
+  usuarioId    : UUID «FK»
+  livroId      : UUID «FK»
+  titulo       : String
+  corpo        : Text
+  publica      : Boolean
+  curtidas     : Int
+  criadoEm    : DateTime
+  atualizadoEm : DateTime
+}
+
+entity "Livro" as Livro {
+  * id : UUID «PK»
+  --
+  isbn          : String
+  titulo        : String
+  autores       : String[]
+  generos       : String[]
+  sinopse       : Text
+  capaCoverUrl  : String
+  numeroPaginas : Int
+  anoPublicacao : Int
+  editora       : String
+  idioma        : String
+  moods         : MoodLeitura[]
+  criadoEm     : DateTime
+  atualizadoEm : DateTime
+}
+
+entity "RecomendacaoItem" as Recomendacao {
+  * id : UUID «PK»
+  --
+  usuarioId   : UUID «FK»
+  livroId     : UUID «FK»
+  contexto    : ContextoRecomendacao
+  score       : Float
+  geradoEm   : DateTime
+}
+
+entity "LogAlteracao" as LogAlteracao {
+  * id : UUID «PK»
+  --
+  adminId      : UUID «FK»
+  livroId      : UUID «FK»
+  acao         : AcaoCatalogo
+  dadosAntes   : JSON
+  dadosDepois  : JSON
+  realizadaEm : DateTime
+}
+
+entity "ListaLivros" as Lista {
+  * id : UUID «PK»
+  --
+  usuarioId    : UUID «FK»
+  titulo       : String
+  descricao    : Text
+  publica      : Boolean
+  criadaEm    : DateTime
+  atualizadaEm : DateTime
+}
+
+entity "ListaItem" as ListaItem {
+  * id : UUID «PK»
+  --
+  listaId      : UUID «FK»
+  livroId      : UUID «FK»
+  ordem        : Int
+  adicionadoEm : DateTime
+}
+
+entity "Clube" as Clube {
+  * id : UUID «PK»
+  --
+  adminId      : UUID «FK»
+  livroId      : UUID «FK»
+  nome         : String
+  descricao    : Text
+  privacidade  : PrivacidadeClube
+  codigoAcesso : String
+  limiteMemb   : Int
+  status       : StatusClube
+  criadoEm    : DateTime
+  encerradoEm : DateTime
+}
+
+entity "MembroClube" as Membro {
+  * id : UUID «PK»
+  --
+  clubeId   : UUID «FK»
+  usuarioId : UUID «FK»
+  papel     : PapelMembro
+  entradaEm : DateTime
+}
+
+entity "Discussao" as Discussao {
+  * id : UUID «PK»
+  --
+  clubeId  : UUID «FK»
+  autorId  : UUID «FK»
+  titulo   : String
+  corpo    : Text
+  capitulo : Int
+  fixada   : Boolean
+  criadaEm : DateTime
+}
+
+entity "Comentario" as Comentario {
+  * id : UUID «PK»
+  --
+  discussaoId : UUID «FK»
+  autorId     : UUID «FK»
+  texto       : Text
+  respondeAId : UUID
+  criadoEm   : DateTime
+  editadoEm  : DateTime
+}
+
+' ─────────────────────────────────────────────
+' ÂNCORAS VERTICAIS (forçam fluxo top-down)
+' ─────────────────────────────────────────────
+
+' Coluna central: Usuario desce até Livro
+Usuario        -[hidden]down- Estante
+Estante        -[hidden]down- EstanteItem
+EstanteItem    -[hidden]down- HistoricoProgresso
+HistoricoProgresso -[hidden]down- Avaliacao
+Avaliacao      -[hidden]down- Resenha
+Resenha        -[hidden]down- Livro
+
+' Coluna esquerda: preferências e logs descem junto com Usuario
+Preferencias   -[hidden]down- ConfigNotif
+ConfigNotif    -[hidden]down- Dispositivo
+Dispositivo    -[hidden]down- ImportacaoJob
+ImportacaoJob  -[hidden]down- LogAcaoAdmin
+LogAcaoAdmin   -[hidden]down- Notificacao
+
+' Coluna direita: metas, streaks e comunidade
+Meta           -[hidden]down- ProgressoMeta
+ProgressoMeta  -[hidden]down- RegistroDiario
+RegistroDiario -[hidden]down- Streak
+Streak         -[hidden]down- Lista
+Lista          -[hidden]down- ListaItem
+
+' Comunidade desce
+Clube          -[hidden]down- Membro
+Membro         -[hidden]down- Discussao
+Discussao      -[hidden]down- Comentario
+
+' Alinha colunas laterais com a central
+Usuario        -[hidden]right- Meta
+Preferencias   -[hidden]left-  Usuario
+
+' Livro alinha com colunas laterais
+Livro          -[hidden]right- Clube
+Livro          -[hidden]right- RecomendacaoItem
+Livro          -[hidden]right- LogAlteracao
+
+' ─────────────────────────────────────────────
+' RELACIONAMENTOS
+' ─────────────────────────────────────────────
+
+' — Usuário (eixo central) —
+Usuario    ||--||  Preferencias    : possui
+Usuario    ||--||  ConfigNotif     : configura
+Usuario    ||--o{  Dispositivo     : registra
+Usuario    ||--o{  ImportacaoJob   : inicia
+Usuario    ||--o{  LogAcaoAdmin    : executa
+Usuario    ||--o{  Notificacao     : recebe
+
+' — Estante —
+Usuario    ||--||  Estante         : possui
+Estante    ||--o{  EstanteItem     : contém
+EstanteItem }o--|| Livro           : referencia
+EstanteItem ||--o{ HistoricoProgresso : registra
+
+' — Avaliação e Resenha —
+Usuario    ||--o{  Avaliacao       : realiza
+Livro      ||--o{  Avaliacao       : recebe
+Avaliacao  ||--o|  Resenha         : compõe
+
+' — Registro diário e Streak —
+Usuario    ||--o{  RegistroDiario  : registra
+Livro      ||--o{  RegistroDiario  : referenciado em
+Usuario    ||--||  Streak          : possui
+
+' — Metas —
+Usuario    ||--o{  Meta            : define
+Meta       ||--o{  ProgressoMeta   : registra
+
+' — Listas —
+Usuario    ||--o{  Lista           : cria
+Lista      ||--o{  ListaItem       : contém
+ListaItem  }o--||  Livro           : referencia
+
+' — Clube do Livro —
+Usuario    ||--o{  Clube           : administra
+Livro      ||--o{  Clube           : usado em
+Clube      ||--o{  Membro          : possui
+Usuario    ||--o{  Membro          : participa de
+Clube      ||--o{  Discussao       : contém
+Usuario    ||--o{  Discussao       : cria
+Discussao  ||--o{  Comentario      : recebe
+Usuario    ||--o{  Comentario      : escreve
+
+' — Recomendação —
+Usuario    ||--o{  Recomendacao    : recebe
+Livro      ||--o{  Recomendacao    : indicado em
+
+' — Logs de catálogo (Admin) —
+Usuario    ||--o{  LogAlteracao    : gera
+Livro      ||--o{  LogAlteracao    : referenciado em
+
+@enduml
