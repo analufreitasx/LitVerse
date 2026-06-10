@@ -1,0 +1,191 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC09 — Explorar Livros por Filtros Emocionais e Leitores Similares
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "Descoberta\nController" as Controller
+participant "Descoberta\nService" as Service
+participant "Fila\nRecomendacao\nService" as Fila
+participant "Consumidor\nFila" as Consumidor
+participant "Similaridade\nService" as Similaridade
+database "PostgreSQL" as DB
+database "Redis\n(Cache)" as Redis
+participant "Amazon\nSQS" as SQS
+
+== Explorar por Filtros Emocionais (Mood) ==
+
+Leitor -> App : Acessa tela "Explorar por Mood"\ne seleciona filtros (moods, gêneros, idioma)
+activate App
+
+App -> Controller : GET /discovery/mood\n{moods, generos, idioma, pagina}
+activate Controller
+
+Controller -> Service : explorarPorMood(usuarioId, FiltroMoodDTO)
+activate Service
+
+Service -> DB : PreferenciasRepository\n.findByUsuarioId(usuarioId)
+activate DB
+DB --> Service : PreferenciasLeitura
+deactivate DB
+
+Service -> DB : LivroRepository\n.findByMoods(moods, FiltroMoodDTO)
+activate DB
+DB --> Service : List<Livro>
+deactivate DB
+
+alt [resultados encontrados]
+
+  Service -> Fila : notificarInteracao(usuarioId, FiltroMoodDTO)
+  activate Fila
+  Fila -> SQS : enviarEventoInteracao(usuarioId, payload)
+  SQS --> Fila : confirmação
+  deactivate Fila
+
+  Service --> Controller : List<Livro>
+  deactivate Service
+
+  Controller --> App : 200 OK — livros filtrados por mood
+  deactivate Controller
+
+  App --> Leitor : Exibe livros com filtros emocionais aplicados
+  deactivate App
+
+else [nenhum]
+
+  Service --> Controller : Lista vazia
+  deactivate Service
+
+  Controller --> App : 200 OK — lista vazia
+  deactivate Controller
+
+  App --> Leitor : Exibe mensagem "Nenhum livro encontrado\npara este mood"
+  deactivate App
+
+end
+
+== Explorar Livros de Leitores Similares ==
+
+Leitor -> App : Acessa seção "Leitores com gosto parecido"
+activate App
+
+App -> Controller : GET /discovery/similar-readers\n{usuarioId}
+activate Controller
+
+Controller -> Service : getLivrosDeLeitoresSimilares(usuarioId)
+activate Service
+
+Service -> DB : EstanteRepository\n.findLivrosLidosPorUsuario(usuarioId)
+activate DB
+DB --> Service : List<livroIds> do usuário
+deactivate DB
+
+Service -> Redis : PerfilRepository\n.buscarSimilares(usuarioId)
+activate Redis
+
+alt [os similares em cache]
+
+  Redis --> Service : List<usuariosSimilares>
+  deactivate Redis
+
+else [_____ cache expirado ou ausente]
+
+  deactivate Redis
+  note over Service, SQS : O perfil de similaridade é recalculado\nassincronamente via SQS
+
+  Service -> Fila : notificarInteracao(usuarioId, payload)
+  activate Fila
+  Fila -> SQS : enviarEventoInteracao(usuarioId, payload)
+  activate SQS
+  SQS --> Fila : confirmação
+  deactivate Fila
+
+  SQS -> Consumidor : processarMensagem(mensagem)
+  activate Consumidor
+  Consumidor -> Similaridade : recalcularSimilares(usuarioId)
+  activate Similaridade
+  Similaridade -> Redis : PerfilRepository\n.buscarSimilares(usuarioId)
+  activate Redis
+  Redis --> Similaridade : List<perfis>
+  deactivate Redis
+  Similaridade -> Similaridade : cosineSimilarity(vetorA, vetorB)
+  Similaridade -> Redis : PerfilRepository\n.salvarSimilares(usuarioId, similares)
+  activate Redis
+  Redis --> Similaridade : confirmação
+  deactivate Redis
+  deactivate Similaridade
+  deactivate Consumidor
+  deactivate SQS
+
+  Service -> Redis : PerfilRepository\n.buscarSimilares(usuarioId)
+  activate Redis
+  Redis --> Service : List<usuariosSimilares>
+  deactivate Redis
+
+end
+
+Service -> DB : EstanteRepository\n.findIdsPorUsuarios(usuarioIds)
+activate DB
+DB --> Service : Map<usuarioId, List<livroIds>>
+deactivate DB
+
+Service -> DB : LivroRepository\n.findByMoods(moods, filtro)
+activate DB
+DB --> Service : List<Livro> de leitores similares
+deactivate DB
+
+Service --> Controller : List<Livro>
+deactivate Service
+
+Controller --> App : 200 OK — livros de leitores similares
+deactivate Controller
+
+App --> Leitor : Exibe livros recomendados\npor similaridade de perfil
+deactivate App
+
+@enduml

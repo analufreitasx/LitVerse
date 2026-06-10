@@ -1,0 +1,167 @@
+@startuml LitVerse_D3_Descoberta_Comunidade
+
+title LitVerse — D3: Descoberta & Comunidade (UC08–UC10, UC14–UC17)
+
+skinparam backgroundColor #FDFBFF
+skinparam defaultFontSize 11
+skinparam defaultFontName Arial
+
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontStyle bold
+  FontSize 11
+}
+skinparam actor {
+  BackgroundColor #F0EBFF
+  BorderColor #9B72D8
+  FontStyle bold
+  FontSize 11
+}
+skinparam sequence {
+  ArrowColor #6A4CA0
+  ArrowThickness 1.5
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FAF7FF
+  DividerBackgroundColor #EDE5FF
+  DividerBorderColor #C4ADEE
+  GroupBorderColor #9B72D8
+  GroupBackgroundColor #F0EBFF55
+  GroupFontColor #4B2E83
+  GroupFontStyle bold
+}
+skinparam note {
+  BackgroundColor #F5F0FF
+  BorderColor #C4ADEE
+  FontSize 10
+}
+
+actor "Leitor" as U
+
+participant "Controller" as CTL
+participant "PreferenciasService\n/ DescobertaService\n/ NotificacaoService" as PS
+participant "ClubeService\n/ ListaService" as CS
+
+participant "Banco de Dados\n(PostgreSQL)" as DB
+participant "Redis (Cache)" as RD
+participant "SQS + FastAPI\n(Recomendações)" as REC
+participant "Firebase FCM" as FCM
+
+' ═══════════════════════════════════════════════
+' UC08 — Configurar Preferências Iniciais
+' ═══════════════════════════════════════════════
+== UC08 — Configurar Preferências Iniciais ==
+
+autonumber 1
+
+U -> CTL : salvarPreferencias(usuarioId, dto)
+CTL -> PS : salvarPreferencias(usuarioId, dto)
+PS -> DB : SELECT Usuario / INSERT|UPDATE PreferenciasLeitura
+DB --> PS : PreferenciasLeitura
+PS -> REC : publish(evento preferências)
+note right of REC : [assíncrono]\ngerarRecomendacoes → salvar perfil no Redis
+PS --> CTL : PreferenciasLeitura
+CTL --> U : 200 OK
+
+' ═══════════════════════════════════════════════
+' UC09 — Explorar por Mood e Leitores Similares
+' ═══════════════════════════════════════════════
+== UC09 — Explorar por Mood e Leitores Similares ==
+
+autonumber 1
+
+U -> CTL : explorarPorMood(usuarioId, filtro)
+CTL -> PS : explorarPorMood(usuarioId, filtro)
+PS -> DB : SELECT Livro WHERE moods IN (...)
+DB --> PS : List<Livro>
+PS -> REC : publish(evento interação)
+note right of REC : [assíncrono]\nrecalcularSimilares → salvar no Redis
+PS --> CTL : List<Livro>
+CTL --> U : 200 OK — List<Livro>
+
+' ═══════════════════════════════════════════════
+' UC10 — Feed Personalizado e Notificações Push
+' ═══════════════════════════════════════════════
+== UC10 — Feed Personalizado e Notificações Push ==
+
+autonumber 1
+
+U -> CTL : getFeedPersonalizado(usuarioId)
+CTL -> PS : getFeedPersonalizado(usuarioId)
+PS -> RD : GET cache feed:{usuarioId}
+alt cache hit
+  RD --> PS : List<RecomendacaoItem>
+else cache miss
+  PS -> DB : SELECT RecomendacaoItem
+  DB --> PS : List<RecomendacaoItem>
+  PS -> RD : SET cache feed:{usuarioId}
+end
+PS --> CTL : List<RecomendacaoItem>
+CTL --> U : 200 OK — Feed personalizado
+
+autonumber 1
+
+PS -> DB : SELECT DispositivoUsuario WHERE usuarioId=?
+DB --> PS : List<fcmToken>
+PS -> FCM : enviarPush(tokens, titulo, corpo)
+FCM --> U : push notification
+
+' ═══════════════════════════════════════════════
+' UC14 / UC15 / UC16 — Clube do Livro
+' ═══════════════════════════════════════════════
+== UC14 / UC15 / UC16 — Clube do Livro ==
+
+autonumber 1
+
+U -> CTL : criarClube(dto)
+CTL -> CS : criarClube(dto)
+CS -> DB : INSERT Clube / INSERT MembroClube{ADMIN}
+DB --> CS : Clube
+CS --> CTL : Clube
+CTL --> U : 201 Created — Clube
+
+autonumber 1
+
+U -> CTL : entrarNoClube(clubeId, codigoAcesso)
+CTL -> CS : entrarNoClube(clubeId, usuarioId, codigoAcesso)
+CS -> DB : SELECT Clube / INSERT MembroClube{MEMBRO}
+DB --> CS : MembroClube
+CS -> FCM : notificarAdmin(ALERTA_CLUBE)
+CS --> CTL : MembroClube
+CTL --> U : 201 Created — MembroClube
+
+autonumber 1
+
+U -> CTL : adicionarComentario(discussaoId, texto)
+CTL -> CS : adicionarComentario(discussaoId, usuarioId, texto)
+CS -> DB : SELECT MembroClube / INSERT Comentario
+DB --> CS : Comentario
+CS -> FCM : enviarPushEmLote(membros, ALERTA_CLUBE)
+FCM --> U : notificações push
+CS --> CTL : Comentario
+CTL --> U : 201 Created — Comentario
+
+' ═══════════════════════════════════════════════
+' UC17 — Criar e Explorar Listas Públicas
+' ═══════════════════════════════════════════════
+== UC17 — Criar e Explorar Listas Públicas ==
+
+autonumber 1
+
+U -> CTL : criarLista(usuarioId, dto)
+CTL -> CS : criarLista(usuarioId, dto)
+CS -> DB : INSERT ListaLivros
+DB --> CS : ListaLivros
+CS --> CTL : ListaLivros
+CTL --> U : 201 Created — ListaLivros
+
+autonumber 1
+
+U -> CTL : explorarListas(filtro)
+CTL -> CS : explorarListasPublicas(filtro)
+CS -> DB : SELECT ListaLivros WHERE publica=true
+DB --> CS : List<ListaLivros>
+CS --> CTL : List<ListaLivros>
+CTL --> U : 200 OK — List<ListaLivros>
+
+@enduml

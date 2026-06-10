@@ -1,0 +1,203 @@
+@startuml UC03_UC04_AvaliarLivro_Resenha
+
+title UC03 + UC04 — Avaliar Livro e Escrever Resenha\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #333333
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F0EBFF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class Avaliacao {
+    - id : String
+    - usuarioId : String
+    - livroId : String
+    - nota : Float
+    - tags : List<String>
+    - resenha : Resenha
+    - criadoEm : LocalDateTime
+    - atualizadoEm : LocalDateTime
+  }
+
+  class Resenha {
+    - id : String
+    - avaliacaoId : String
+    - usuarioId : String
+    - livroId : String
+    - titulo : String
+    - corpo : String
+    - publica : Boolean
+    - curtidas : Integer
+    - criadoEm : LocalDateTime
+    - atualizadoEm : LocalDateTime
+  }
+
+  class Livro {
+    - id : String
+    - isbn : String
+    - titulo : String
+    - autores : List<String>
+    - generos : List<String>
+    - sinopse : String
+    - capaCoverUrl : String
+    - numeroPaginas : Integer
+    - anoPublicacao : Integer
+    - editora : String
+    - idioma : String
+  }
+
+  class EstanteItem {
+    - id : String
+    - usuarioId : String
+    - livroId : String
+    - status : StatusLeitura
+    - progresso : Integer
+    - dataInicio : LocalDate
+    - dataConclusao : LocalDate
+    - avaliacao : Float
+    - criadoEm : LocalDateTime
+    - atualizadoEm : LocalDateTime
+  }
+
+  enum StatusLeitura {
+    LENDO
+    LIDO
+    QUERO_LER
+    ABANDONADO
+  }
+
+  Avaliacao *-- Resenha       : compoe (0..1)
+  Avaliacao --> Livro         : referencia
+  EstanteItem --> StatusLeitura : usa
+  EstanteItem --> Livro       : referencia
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class AvaliacaoRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Avaliacao
+    + findByUsuarioIdELivroId(usuarioId: String, livroId: String) : Avaliacao
+    + findByLivroId(livroId: String) : List<Avaliacao>
+    + calcularMediaPorLivroId(livroId: String) : Float
+    + save(avaliacao: Avaliacao) : Avaliacao
+    + update(avaliacao: Avaliacao) : Avaliacao
+  }
+
+  class ResenhaRepository {
+    - db : PostgreSQLClient
+    + findByAvaliacaoId(avaliacaoId: String) : Resenha
+    + findPublicasByLivroId(livroId: String) : List<Resenha>
+    + findByUsuarioId(usuarioId: String) : List<Resenha>
+    + save(resenha: Resenha) : Resenha
+    + update(resenha: Resenha) : Resenha
+    + delete(id: String) : void
+  }
+
+  class EstanteRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioIdELivroId(usuarioId: String, livroId: String) : EstanteItem
+    + findByUsuarioId(usuarioId: String) : List<EstanteItem>
+    + save(item: EstanteItem) : EstanteItem
+    + existsByUsuarioIdELivroId(usuarioId: String, livroId: String) : Boolean
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class AvaliarLivroService {
+    - avaliacaoRepository : AvaliacaoRepository
+    - estanteRepository : EstanteRepository
+    + avaliarLivro(dto: AvaliarLivroDTO) : Avaliacao
+    - validarLivroNaEstante(usuarioId: String, livroId: String) : void
+    - validarNota(nota: Float) : void
+  }
+
+  class ResenhaService {
+    - resenhaRepository : ResenhaRepository
+    - avaliacaoRepository : AvaliacaoRepository
+    + criarResenha(dto: ResenhaDTO) : Resenha
+    + editarResenha(dto: ResenhaDTO) : Resenha
+    + excluirResenha(resenhaId: String, usuarioId: String) : void
+    + listarResenhasPublicas(livroId: String) : List<Resenha>
+    - validarProprietario(resenhaId: String, usuarioId: String) : void
+  }
+
+  AvaliarLivroService --> AvaliacaoRepository  : usa
+  AvaliarLivroService --> EstanteRepository    : usa
+  AvaliarLivroService ..> Avaliacao            : retorna
+  AvaliarLivroService ..> EstanteItem          : manipula
+
+  ResenhaService --> ResenhaRepository         : usa
+  ResenhaService --> AvaliacaoRepository       : usa
+  ResenhaService ..> Resenha                   : retorna
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class AvaliacaoController {
+    - avaliarLivroService : AvaliarLivroService
+    + avaliarLivro(dto: AvaliarLivroDTO) : ResponseEntity<Avaliacao>
+    + buscarAvaliacaoPorLivro(livroId: String, usuarioId: String) : ResponseEntity<Avaliacao>
+  }
+
+  class ResenhaController {
+    - resenhaService : ResenhaService
+    + criarResenha(dto: ResenhaDTO) : ResponseEntity<Resenha>
+    + editarResenha(dto: ResenhaDTO) : ResponseEntity<Resenha>
+    + excluirResenha(resenhaId: String, usuarioId: String) : ResponseEntity<Void>
+    + listarResenhasPublicas(livroId: String) : ResponseEntity<List<Resenha>>
+  }
+
+  class AvaliarLivroDTO {
+    + usuarioId : String
+    + livroId : String
+    + nota : Float
+    + tags : List<String>
+  }
+
+  class ResenhaDTO {
+    + resenhaId : String
+    + usuarioId : String
+    + livroId : String
+    + titulo : String
+    + corpo : String
+    + publica : Boolean
+  }
+
+  AvaliacaoController --> AvaliarLivroService  : delega
+  AvaliacaoController ..> AvaliarLivroDTO      : recebe
+
+  ResenhaController --> ResenhaService         : delega
+  ResenhaController ..> ResenhaDTO             : recebe
+}
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS ENTRE CAMADAS
+' ─────────────────────────────────────────────
+AvaliarLivroService ..> AvaliarLivroDTO : recebe
+ResenhaService ..> ResenhaDTO           : recebe
+
+@enduml

@@ -1,0 +1,150 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC17 — Criar e Explorar Listas Públicas de Livros
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "ListaLivros\nController" as Controller
+participant "CriarLista\nService" as CriarService
+participant "ExplorarLista\nService" as ExplorarService
+database "PostgreSQL" as DB
+
+== Criar lista pública ==
+
+Leitor -> App : Acessa "Criar Nova Lista"
+activate App
+
+App -> Controller : POST /listas {titulo, descricao, publica: true}
+activate Controller
+
+Controller -> CriarService : criarLista(usuarioId, ListaDTO)
+activate CriarService
+
+CriarService -> DB : save(ListaLivros)
+activate DB
+DB --> CriarService : Retorna lista criada
+deactivate DB
+
+CriarService --> Controller : Retorna ListaLivros
+deactivate CriarService
+
+Controller --> App : 201 Created {listaId, titulo, publica}
+deactivate Controller
+
+App --> Leitor : Exibe lista criada com opção de adicionar livros
+deactivate App
+
+== Adicionar livro à lista ==
+
+Leitor -> App : Busca e seleciona livro para adicionar
+activate App
+
+App -> Controller : POST /listas/{listaId}/livros {livroId}
+activate Controller
+
+Controller -> CriarService : adicionarLivro(usuarioId, listaId, livroId)
+activate CriarService
+
+CriarService -> DB : existsByListaIdELivroId(listaId, livroId)
+activate DB
+DB --> CriarService : false
+deactivate DB
+
+CriarService -> DB : findById(livroId) — LivroRepository
+activate DB
+DB --> CriarService : Retorna Livro
+deactivate DB
+
+CriarService -> DB : save(ListaItem)
+activate DB
+DB --> CriarService : Confirma inserção
+deactivate DB
+
+CriarService --> Controller : Retorna ListaItem
+deactivate CriarService
+
+Controller --> App : 201 Created {listaItemId, livroId, ordem}
+deactivate Controller
+
+App --> Leitor : Exibe livro adicionado à lista
+deactivate App
+
+== Explorar listas públicas ==
+
+Leitor -> App : Acessa "Explorar Listas" e aplica filtros
+activate App
+
+App -> Controller : GET /listas/publicas?termo={t}&ordenar={o}&pagina={p}
+activate Controller
+
+Controller -> ExplorarService : explorarListasPublicas(FiltroListaDTO)
+activate ExplorarService
+
+ExplorarService -> DB : findPublicasComFiltro(FiltroListaDTO)
+activate DB
+DB --> ExplorarService : Retorna List<ListaLivros>
+deactivate DB
+
+ExplorarService --> Controller : Retorna listas paginadas
+deactivate ExplorarService
+
+alt [listas encontradas]
+  Controller --> App : 200 OK {listas[], totalResultados}
+  deactivate Controller
+  App --> Leitor : Exibe listas públicas com título, descrição e total de livros
+  deactivate App
+
+else [nenhuma lista encontrada]
+  Controller --> App : 200 OK {listas: [], totalResultados: 0}
+  deactivate Controller
+  App --> Leitor : Exibe mensagem "Nenhuma lista encontrada"
+  deactivate App
+
+end
+
+@enduml

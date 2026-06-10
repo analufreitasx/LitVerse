@@ -1,0 +1,164 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC02 — Atualizar status e progresso de leitura
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "ProgressoLeitura\nController" as Controller
+participant "ProgressoLeitura\nService" as Service
+participant "EstanteRepository" as EstanteRepo
+participant "HistoricoProgresso\nRepository" as HistRepo
+database "PostgreSQL" as DB
+
+== Atualizar status e progresso de leitura ==
+
+Leitor -> App : Acessa livro na estante\ne seleciona "Atualizar progresso"
+activate App
+
+App -> App : Exibe formulário\n(página atual / novo status)
+App --> Leitor : Formulário de atualização
+
+Leitor -> App : Informa página atual\ne/ou novo status de leitura
+activate App
+
+App -> Controller : PATCH /shelf/{livroId}/progress\n{novoStatus, paginaAtual}
+activate Controller
+
+Controller -> Service : atualizarProgresso(idUsuario, dto)
+activate Service
+
+Service -> EstanteRepo : findByUsuarioIdELivroId\n(usuarioId, livroId)
+activate EstanteRepo
+
+EstanteRepo -> DB : SELECT estante_item\nWHERE usuario_id AND livro_id
+activate DB
+DB --> EstanteRepo : Retorna EstanteItem
+deactivate DB
+
+EstanteRepo --> Service : EstanteItem atual
+deactivate EstanteRepo
+
+alt [livro não encontrado na estante]
+
+  Service --> Controller : Lança exceção NotFoundException
+  Controller --> App : 404 Not Found\n"Livro não encontrado na estante"
+  App --> Leitor : Exibe mensagem de erro
+  deactivate Service
+  deactivate Controller
+  deactivate App
+
+else [livro encontrado]
+
+  Service -> Service : validarNumeroPagina\n(paginaAtual, totalPaginas)
+
+  alt [página inválida — maior que total de páginas]
+
+    Service --> Controller : Lança exceção BadRequestException
+    Controller --> App : 400 Bad Request\n"Número de página inválido"
+    App --> Leitor : Exibe mensagem de erro
+
+  else [página válida]
+
+    Service -> Service : construirHistorico\n(estanteItem, dto)
+    note right
+      Registra:
+      - paginaAnterior → novaPagina
+      - statusAnterior → novoStatus
+      - registradoEm: now()
+    end note
+
+    Service -> HistRepo : salvar(historicoProgressoLeitura)
+    activate HistRepo
+
+    HistRepo -> DB : INSERT INTO historico_progresso_leitura
+    activate DB
+    DB --> HistRepo : Confirma inserção
+    deactivate DB
+
+    HistRepo --> Service : HistoricoProgressoLeitura salvo
+    deactivate HistRepo
+
+    Service -> Service : Atualiza EstanteItem\n(progresso, status,\ndataInicio / dataConclusao)
+
+    note right
+      Se novoStatus = LENDO e dataInicio nula:
+        dataInicio ← hoje
+      Se novoStatus = LIDO:
+        dataConclusao ← hoje
+    end note
+
+    Service -> EstanteRepo : save(estanteItemAtualizado)
+    activate EstanteRepo
+
+    EstanteRepo -> DB : UPDATE estante_item\nSET progresso, status,\ndataInicio, dataConclusao,\natualizadoEm
+    activate DB
+    DB --> EstanteRepo : Confirma atualização
+    deactivate DB
+
+    EstanteRepo --> Service : EstanteItem atualizado
+    deactivate EstanteRepo
+
+    Service --> Controller : EstanteItem atualizado
+    deactivate Service
+
+    Controller --> App : 200 OK — EstanteItem\n{progresso, status, historico}
+    deactivate Controller
+
+    alt [status alterado para LIDO]
+      App --> Leitor : Exibe tela de conclusão\n🎉 "Você terminou o livro!"
+    else [progresso atualizado]
+      App --> Leitor : Exibe progresso atualizado\nna estante literária
+    end
+
+    deactivate App
+
+  end
+
+end
+
+@enduml

@@ -1,0 +1,125 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC07 — Definir metas de leitura
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "Backend\n(API)" as API
+database "PostgreSQL" as DB
+
+== Carregar metas ==
+
+Leitor -> App : Acessa seção de Metas e Hábitos
+activate App
+
+App -> API : GET /goals/{usuario_id}
+activate API
+
+API -> DB : Consulta metas existentes do usuário
+activate DB
+DB --> API : Retorna lista de metas
+deactivate DB
+
+API --> App : 200 OK — metas do usuário
+deactivate API
+
+App --> Leitor : Exibe metas atuais e opções de criar ou editar
+deactivate App
+
+== Criar ou editar meta ==
+
+alt [criar nova meta]
+
+  Leitor -> App : Preenche nova meta (quantidade, período) e confirma
+  activate App
+
+  note right of App
+    Valida: quantidade > 0
+    e período informado
+  end note
+
+  App -> API : POST /goals\n{usuario_id, quantidade, periodo, data_inicio}
+  activate API
+
+  API -> DB : Insere nova meta
+  activate DB
+  DB --> API : Confirma inserção
+  deactivate DB
+
+  API --> App : 201 Created — meta criada com progresso inicial
+  deactivate API
+
+  App --> Leitor : Exibe nova meta e barra de progresso
+  deactivate App
+
+else [editar meta existente]
+
+  Leitor -> App : Seleciona meta e altera informações (quantidade, período)
+  activate App
+
+  note right of App
+    Valida: quantidade > 0
+    e período informado
+  end note
+
+  App -> API : PUT /goals/{meta_id}\n{quantidade, periodo}
+  activate API
+
+  API -> DB : Atualiza meta
+  activate DB
+  DB --> API : Confirma atualização
+  deactivate DB
+
+  API --> App : 200 OK — meta atualizada
+  deactivate API
+
+  App --> Leitor : Exibe confirmação e meta atualizada
+  deactivate App
+
+end
+@enduml

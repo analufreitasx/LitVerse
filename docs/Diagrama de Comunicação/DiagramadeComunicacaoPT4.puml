@@ -1,0 +1,107 @@
+@startuml LitVerse_D4_Administracao
+
+title LitVerse — D4: Administração (UC18, UC19, UC20)
+
+skinparam backgroundColor #FDFBFF
+skinparam defaultFontSize 11
+skinparam defaultFontName Arial
+
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontStyle bold
+  FontSize 11
+}
+skinparam actor {
+  BackgroundColor #F0EBFF
+  BorderColor #9B72D8
+  FontStyle bold
+  FontSize 11
+}
+skinparam sequence {
+  ArrowColor #6A4CA0
+  ArrowThickness 1.5
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FAF7FF
+  DividerBackgroundColor #EDE5FF
+  DividerBorderColor #C4ADEE
+  GroupBorderColor #9B72D8
+  GroupBackgroundColor #F0EBFF55
+  GroupFontColor #4B2E83
+  GroupFontStyle bold
+}
+skinparam note {
+  BackgroundColor #F5F0FF
+  BorderColor #C4ADEE
+  FontSize 10
+}
+
+actor "Admin" as A
+actor "Leitor" as U
+
+participant "CatalogoAdminController" as CAC
+participant "UsuarioAdminController" as UAC
+
+participant "CatalogoAdminService" as CAS
+participant "UsuarioAdminService" as UAS
+participant "NotificacaoService" as NS
+
+participant "Banco de Dados\n(PostgreSQL)" as DB
+participant "Firebase FCM" as FCM
+
+' ═══════════════════════════════════════════════
+' UC18 / UC19 — Gerenciar Catálogo de Livros
+' ═══════════════════════════════════════════════
+== UC18 / UC19 — Gerenciar Catálogo de Livros (Admin) ==
+
+note over CAC : AdminGuard valida JWT e perfil ADMIN
+
+autonumber 1
+
+A -> CAC : cadastrarLivro(adminId, dto: LivroDTO)
+CAC -> CAS : cadastrarLivro(adminId, dto)
+CAS -> DB : SELECT Livro WHERE isbn=?
+DB --> CAS : false (ISBN único)
+CAS -> DB : INSERT Livro
+DB --> CAS : Livro
+CAS -> DB : INSERT LogAlteracao{acao: CADASTRO}
+DB --> CAS : LogAlteracao
+CAS --> CAC : Livro
+CAC --> A : 201 Created — Livro
+
+autonumber 1
+
+A -> CAC : editarLivro(adminId, livroId, dto: LivroDTO)
+CAC -> CAS : editarLivro(adminId, livroId, dto)
+CAS -> DB : UPDATE Livro
+DB --> CAS : Livro
+CAS -> DB : INSERT LogAlteracao{acao: EDICAO}
+DB --> CAS : LogAlteracao
+CAS --> CAC : Livro atualizado
+CAC --> A : 200 OK — Livro
+
+' ═══════════════════════════════════════════════
+' UC20 — Gerenciar Contas de Usuários
+' ═══════════════════════════════════════════════
+== UC20 — Gerenciar Contas de Usuários (Admin) ==
+
+note over UAC : AdminGuard valida JWT e perfil ADMIN
+
+autonumber 1
+
+A -> UAC : suspenderConta(adminId, usuarioId, motivo)
+UAC -> UAS : suspenderConta(adminId, usuarioId, motivo)
+UAS -> DB : SELECT Usuario WHERE id=?
+DB --> UAS : Usuario
+UAS -> DB : UPDATE Usuario{status: SUSPENSA}
+DB --> UAS : Usuario
+UAS -> DB : INSERT LogAcaoAdmin{acao: SUSPENSAO}
+DB --> UAS : LogAcaoAdmin
+UAS -> NS : enviarEmailStatusConta(usuario, SUSPENSA)
+NS -> FCM : enviarPush(token, "Conta suspensa", corpo)
+FCM --> U : push notification
+NS --> UAS : notificado
+UAS --> UAC : void
+UAC --> A : 200 OK
+
+@enduml

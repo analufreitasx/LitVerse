@@ -1,0 +1,142 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC05 — Importar Histórico do Goodreads
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "ImportacaoController" as Controller
+participant "ImportacaoGoodreads\nService" as Service
+participant "GoodreadsCsvParser" as Parser
+participant "BuscaLivro\nExternoService" as External
+participant "Google Books\nAPI" as GoogleBooks
+database "PostgreSQL" as DB
+
+== Upload e validação do CSV ==
+
+Leitor -> App : Seleciona arquivo .csv do Goodreads
+activate App
+
+App -> Controller : POST /importacao/goodreads\n{usuarioId, arquivo: MultipartFile}
+activate Controller
+
+Controller -> Service : iniciarImportacao(usuarioId, arquivo)
+activate Service
+
+Service -> Parser : parsear(arquivo)
+activate Parser
+
+alt [arquivo inválido]
+  Parser --> Service : Lança exceção: CSV inválido
+  deactivate Parser
+  Service --> Controller : Erro: arquivo incompatível
+  deactivate Service
+  Controller --> App : 422 Unprocessable Entity
+  deactivate Controller
+  App --> Leitor : "Arquivo inválido. Verifique\nse é um export do Goodreads."
+  deactivate App
+
+else [arquivo válido]
+  Parser --> Service : List<GoodreadsRegistro>
+  deactivate Parser
+
+  Service -> DB : ImportacaoRepository.save(\n  job {status: PROCESSANDO})
+  activate DB
+  DB --> Service : ImportacaoJob criado
+  deactivate DB
+
+  == Processamento dos registros ==
+
+  loop [para cada GoodreadsRegistro]
+
+    Service -> DB : LivroRepository.findByIsbn(isbn)
+    activate DB
+    DB --> Service : Livro | null
+    deactivate DB
+
+    alt [livro não encontrado localmente]
+      Service -> External : buscarPorIsbn(isbn)
+      activate External
+      External -> GoogleBooks : GET /volumes?q=isbn:{isbn}
+      activate GoogleBooks
+      GoogleBooks --> External : Dados do livro
+      deactivate GoogleBooks
+      External --> Service : Livro preenchido
+      deactivate External
+
+      Service -> DB : LivroRepository.save(livro)
+      activate DB
+      DB --> Service : Livro persistido
+      deactivate DB
+    end
+
+    Service -> DB : EstanteRepository.saveItem(\n  {livroId, status, avaliacao,\n   resenha, dataInicio, dataConclusao})
+    activate DB
+    DB --> Service : EstanteItem salvo
+    deactivate DB
+
+  end
+
+  == Conclusão ==
+
+  Service -> DB : ImportacaoRepository.update(\n  job {status: CONCLUIDO})
+  activate DB
+  DB --> Service : Job finalizado
+  deactivate DB
+
+  Service --> Controller : ImportacaoResultado\n{importados, ignorados, erros}
+  deactivate Service
+
+  Controller --> App : 200 OK {ImportacaoResultado}
+  deactivate Controller
+
+  App --> Leitor : "Importação concluída!\nX livros adicionados à estante."
+  deactivate App
+
+end
+
+@enduml

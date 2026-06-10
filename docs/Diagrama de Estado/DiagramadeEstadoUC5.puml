@@ -1,0 +1,109 @@
+@startuml UC05_ImportacaoGoodreads
+
+title UC05 – Importar Histórico do Goodreads\nDiagrama de Estados
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+
+skinparam state {
+  BackgroundColor      #E8D5F5
+  BorderColor          #7B2FA8
+  FontColor            #1A0033
+  FontSize             12
+  FontStyle            plain
+  ArrowColor           #5A1A8A
+  ArrowThickness       1.5
+  StartColor           #3D0066
+  EndColor             #3D0066
+  AttributeFontColor   #2D0050
+  AttributeFontSize    11
+}
+
+skinparam note {
+  BackgroundColor #F3E8FF
+  BorderColor     #7B2FA8
+  FontSize        11
+  FontColor       #2D0050
+}
+
+note "**Transições principais:**\n[leitor_envia_arquivo]       -> Pendente\n[importacao_iniciada]        -> Processando\n[arquivo_invalido]           -> Erro\n[todos_registros_processados]-> Concluído\n[falha_processamento]        -> Erro\n[leitor_consulta_resultado]  -> Resultado Exibido" as N1
+
+' ══════════════════════════════════════
+'  PONTO DE ENTRADA
+' ══════════════════════════════════════
+[*] --> AguardandoArquivo
+
+state AguardandoArquivo {
+  usuarioId     : definido
+  arquivo       : "não enviado"
+  statusJob     : "inexistente"
+}
+
+' ══════════════════════════════════════
+'  ENVIO E VALIDAÇÃO DO ARQUIVO
+' ══════════════════════════════════════
+AguardandoArquivo -down-> Pendente : [leitor_envia_arquivo]\niniciarImportacao()\ncriarImportacaoJob()\nsalvarJob(status=PENDENTE)
+
+state Pendente {
+  status        : "PENDENTE"
+  jobId         : "gerado"
+  arquivoRecebido : true
+  totalRegistros  : 0
+}
+
+Pendente -down-> Processando   : [importacao_iniciada]\nparsearCsv()\nvalidarCabecalho()
+Pendente -right-> Erro         : [arquivo_invalido]\nnotificarLeitor()
+
+' ══════════════════════════════════════
+'  PROCESSAMENTO
+' ══════════════════════════════════════
+state Processando {
+  status          : "PROCESSANDO"
+  registrosLidos  : "incrementando"
+  importados      : "incrementando"
+  ignorados       : "incrementando"
+  atualizadoEm    : "agora"
+}
+
+Processando -down-> Concluido  : [todos_registros_processados]\natualizarJob(status=CONCLUIDO)\ngerarResultado()
+Processando -right-> Erro      : [falha_processamento]\natualizarJob(status=ERRO)\nregistrarMotivo()
+
+' ══════════════════════════════════════
+'  ESTADOS TERMINAIS DO JOB
+' ══════════════════════════════════════
+state Concluido {
+  status        : "CONCLUIDO"
+  importados    : "total salvo"
+  ignorados     : "duplicatas / sem match"
+  erros         : "registros inválidos"
+  estanteAtualizada : true
+}
+
+state Erro {
+  status        : "ERRO"
+  motivo        : "arquivo inválido / falha interna"
+  estante       : "inalterada"
+}
+
+' ══════════════════════════════════════
+'  CONSULTA DO RESULTADO
+' ══════════════════════════════════════
+Concluido -down-> ResultadoExibido : [leitor_consulta_resultado]\nconsultarStatusImportacao()\nexibirResumo()
+Erro      -down-> ResultadoExibido : [leitor_consulta_resultado]\nconsultarStatusImportacao()\nexibirMensagemErro()
+
+state ResultadoExibido {
+  jobId         : "exibido"
+  totalRegistros : "exibido"
+  importados    : "exibido"
+  ignorados     : "exibido"
+  erros         : "exibido"
+}
+
+Erro --> AguardandoArquivo : [leitor_tenta_novamente]\nreiniciarFluxo()
+
+' ══════════════════════════════════════
+'  ESTADO TERMINAL
+' ══════════════════════════════════════
+ResultadoExibido --> [*]
+
+@enduml

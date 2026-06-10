@@ -1,0 +1,179 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC19 — Editar Informações de um Livro
+
+actor Admin
+participant "App\n(Mobile)" as App
+participant "CatalogoAdmin\nController" as Controller
+participant "AdminGuard" as Guard
+participant "CatalogoAdmin\nService" as Service
+participant "LivroRepository" as LivroRepo
+participant "LogAlteracao\nRepository" as LogRepo
+database "PostgreSQL" as DB
+
+== Editar informações de um livro ==
+
+Admin -> App : Acessa painel e seleciona livro para editar
+activate App
+
+App -> Controller : GET /admin/catalog/{livroId}
+activate Controller
+
+Controller -> Guard : canActivate(token JWT)
+activate Guard
+Guard -> DB : findById(usuarioId)
+activate DB
+DB --> Guard : Usuario {perfil}
+deactivate DB
+
+alt [perfil != ADMIN]
+  Guard --> Controller : false
+  Controller --> App : 403 Forbidden
+  App --> Admin : Acesso negado
+  deactivate Guard
+  deactivate Controller
+  deactivate App
+else [perfil == ADMIN]
+  Guard --> Controller : true
+  deactivate Guard
+
+  Controller -> Service : buscarLivroPorId(livroId)
+  activate Service
+  Service -> LivroRepo : findById(livroId)
+  activate LivroRepo
+  LivroRepo -> DB : SELECT * FROM livros WHERE id = livroId
+  activate DB
+  DB --> LivroRepo : Livro
+  deactivate DB
+  LivroRepo --> Service : Livro
+  deactivate LivroRepo
+  Service --> Controller : Livro
+  deactivate Service
+
+  Controller --> App : Retorna dados atuais do livro
+  deactivate Controller
+
+  App --> Admin : Exibe formulário preenchido com dados atuais
+  deactivate App
+
+  == Submissão da edição ==
+
+  Admin -> App : Altera campos e confirma edição
+  activate App
+
+  App -> Controller : PUT /admin/catalog/{livroId} {LivroDTO}
+  activate Controller
+
+  Controller -> Guard : canActivate(token JWT)
+  activate Guard
+  Guard -> DB : findById(usuarioId)
+  activate DB
+  DB --> Guard : Usuario {perfil}
+  deactivate DB
+  Guard --> Controller : true
+  deactivate Guard
+
+  Controller -> Service : editarLivro(adminId, livroId, LivroDTO)
+  activate Service
+
+  Service -> LivroRepo : findById(livroId)
+  activate LivroRepo
+  LivroRepo -> DB : SELECT * FROM livros WHERE id = livroId
+  activate DB
+  DB --> LivroRepo : Livro (dadosAntes)
+  deactivate DB
+  LivroRepo --> Service : Livro (dadosAntes)
+  deactivate LivroRepo
+
+  alt [ISBN foi alterado]
+    Service -> LivroRepo : existsByIsbn(novoIsbn)
+    activate LivroRepo
+    LivroRepo -> DB : SELECT EXISTS(...) WHERE isbn = novoIsbn AND id != livroId
+    activate DB
+    DB --> LivroRepo : Boolean
+    deactivate DB
+    LivroRepo --> Service : true / false
+    deactivate LivroRepo
+
+    alt [ISBN já existe]
+      Service --> Controller : ConflictException
+      Controller --> App : 409 Conflict
+      App --> Admin : Exibe erro "ISBN já cadastrado"
+    end
+  end
+
+  Service -> LivroRepo : update(livro com dadosNovos)
+  activate LivroRepo
+  LivroRepo -> DB : UPDATE livros SET ... WHERE id = livroId
+  activate DB
+  DB --> LivroRepo : Livro atualizado
+  deactivate DB
+  LivroRepo --> Service : Livro atualizado
+  deactivate LivroRepo
+
+  Service -> LogRepo : save(LogAlteracao {adminId, livroId, EDICAO, dadosAntes, dadosDepois})
+  activate LogRepo
+  LogRepo -> DB : INSERT INTO log_alteracoes (...)
+  activate DB
+  DB --> LogRepo : LogAlteracao
+  deactivate DB
+  LogRepo --> Service : LogAlteracao
+  deactivate LogRepo
+
+  Service --> Controller : Livro atualizado
+  deactivate Service
+
+  Controller --> App : 200 OK {Livro atualizado}
+  deactivate Controller
+
+  App --> Admin : Exibe confirmação de edição
+  deactivate App
+
+end
+
+@enduml

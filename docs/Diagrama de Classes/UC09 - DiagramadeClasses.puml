@@ -1,0 +1,231 @@
+@startuml UC09_ExploracaoEmocionalSimilaridade
+
+title UC09 — Explorar Livros por Filtros Emocionais e Leitores Similares\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class DescobertaController {
+    - descobertaService : DescobertaService
+    + explorarPorMood(usuarioId: String, dto: FiltroMoodDTO) : ResponseEntity
+    + getLivrosDeLeitoresSimilares(usuarioId: String) : ResponseEntity
+  }
+
+  class FiltroMoodDTO {
+    + moods   : List<MoodLeitura>
+    + generos : List<String>
+    + idioma  : String
+    + pagina  : Integer
+  }
+
+  DescobertaController ..> FiltroMoodDTO : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class DescobertaService {
+    - livroRepository        : LivroRepository
+    - estanteRepository      : EstanteRepository
+    - preferenciasRepository : PreferenciasRepository
+    - filaRecomendacao       : FilaRecomendacaoService
+    + explorarPorMood(usuarioId: String, filtro: FiltroMoodDTO) : List<Livro>
+    + getLivrosDeLeitoresSimilares(usuarioId: String) : List<Livro>
+    - notificarInteracao(usuarioId: String, filtro: FiltroMoodDTO) : void
+  }
+
+  ' reutilizada do UC08 — acrescenta enviarEventoInteracao
+  class FilaRecomendacaoService {
+    - filaUrl : String
+    + enviarEvento(usuarioId: String, prefs: PreferenciasLeitura) : void
+    + enviarEventoInteracao(usuarioId: String, payload: dict) : void
+  }
+
+  DescobertaService --> FilaRecomendacaoService : notifica via SQS
+  DescobertaService ..> FiltroMoodDTO           : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  ' reutilizada do UC01/UC06 — acrescenta findByMoods e findLivrosLidosPorUsuarios
+  class LivroRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Livro
+    + findByIsbn(isbn: String) : Livro
+    + findByTitulo(titulo: String) : List<Livro>
+    + save(livro: Livro) : Livro
+    + findByMoods(moods: List<MoodLeitura>, filtro: FiltroMoodDTO) : List<Livro>
+  }
+
+  ' reutilizada do UC01/UC06 — acrescenta findLivrosLidosPorUsuario e findIdsPorUsuarios
+  class EstanteRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioId(usuarioId: String) : Estante
+    + findItemByEstanteIdELivroId(estanteId: String, livroId: String) : EstanteItem
+    + saveEstante(estante: Estante) : Estante
+    + saveItem(item: EstanteItem) : EstanteItem
+    + existsItemByEstanteIdELivroId(estanteId: String, livroId: String) : Boolean
+    + findLivrosLidosPorUsuario(usuarioId: String) : List<String>
+    + findIdsPorUsuarios(usuarioIds: List<String>) : Map<String, List<String>>
+  }
+
+  ' reutilizada do UC08 — sem alterações
+  class PreferenciasRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioId(usuarioId: String) : PreferenciasLeitura
+    + save(prefs: PreferenciasLeitura) : PreferenciasLeitura
+    + update(prefs: PreferenciasLeitura) : PreferenciasLeitura
+    + existsByUsuarioId(usuarioId: String) : Boolean
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  ' reutilizada do UC01/UC06 — acrescenta moods
+  class Livro {
+    - id            : String
+    - isbn          : String
+    - titulo        : String
+    - autores       : List<String>
+    - generos       : List<String>
+    - sinopse       : String
+    - capaCoverUrl  : String
+    - numeroPaginas : Integer
+    - anoPublicacao : Integer
+    - editora       : String
+    - idioma        : String
+    - moods         : List<MoodLeitura>
+  }
+
+  ' reutilizada do UC08 — sem alterações
+  class PreferenciasLeitura {
+    - id                : String
+    - usuarioId         : String
+    - generosPreferidos : List<String>
+    - idiomasPreferidos : List<String>
+    - autoresFavoritos  : List<String>
+    - moodsDeLeitura    : List<MoodLeitura>
+    - metaAnualLivros   : Integer
+    - tamanhoPreferido  : TamanhoLivro
+    - criadoEm          : LocalDateTime
+    - atualizadoEm      : LocalDateTime
+  }
+
+  ' reutilizada do UC08 — sem alterações
+  enum MoodLeitura {
+    TENSO
+    RECONFORTANTE
+    FILOSOFICO
+    LEVE
+    AVENTUREIRO
+    ROMANTICO
+    MISTERIOSO
+  }
+
+  ' reutilizada do UC08 — sem alterações
+  enum TamanhoLivro {
+    CURTO
+    MEDIO
+    LONGO
+    QUALQUER
+  }
+
+  Livro               --> MoodLeitura  : possui
+  PreferenciasLeitura --> MoodLeitura  : usa
+  PreferenciasLeitura --> TamanhoLivro : usa
+}
+
+' ─────────────────────────────────────────────
+' SERVIÇO DE RECOMENDAÇÃO (FastAPI — Python)
+' Recebe eventos da fila SQS e gera o perfil
+' ─────────────────────────────────────────────
+package "RecomendacaoService (FastAPI)" <<Rectangle>> {
+
+  ' reutilizada do UC08 — sem alterações
+  class ConsumidorFila {
+    - filaUrl : String
+    + escutarFila() : void
+    + processarMensagem(mensagem: dict) : void
+  }
+
+  ' reutilizada do UC08 — sem alterações
+  class RecomendacaoInicialService {
+    - perfilRepository : PerfilRepository
+    + gerarRecomendacoes(usuarioId: String, prefs: dict) : void
+    + atualizarPerfil(usuarioId: String, prefs: dict) : void
+  }
+
+  ' novo — calcula similaridade entre leitores
+  class SimilaridadeService {
+    - perfilRepository : PerfilRepository
+    + recalcularSimilares(usuarioId: String) : void
+    + cosineSimilarity(vetorA: List<Float>, vetorB: List<Float>) : Float
+  }
+
+  ' reutilizada do UC08 — acrescenta buscarSimilares e salvarSimilares
+  class PerfilRepository {
+    - redis : RedisClient
+    - db    : PostgreSQLClient
+    + salvar(usuarioId: String, perfil: dict) : void
+    + buscar(usuarioId: String) : dict
+    + limparCache(usuarioId: String) : void
+    + buscarSimilares(usuarioId: String) : List<dict>
+    + salvarSimilares(usuarioId: String, similares: List<dict>) : void
+  }
+
+  ConsumidorFila          --> RecomendacaoInicialService : delega
+  ConsumidorFila          --> SimilaridadeService        : delega
+  RecomendacaoInicialService --> PerfilRepository        : usa
+  SimilaridadeService     --> PerfilRepository           : usa
+}
+
+' ─────────────────────────────────────────────
+' LIGAÇÕES ENTRE CAMADAS
+' ─────────────────────────────────────────────
+DescobertaController --> DescobertaService         : delega
+
+DescobertaService --> LivroRepository              : usa
+DescobertaService --> EstanteRepository            : usa
+DescobertaService --> PreferenciasRepository       : usa
+
+LivroRepository        ..> Livro                   : acessa
+EstanteRepository      ..> Livro                   : acessa
+PreferenciasRepository ..> PreferenciasLeitura     : acessa
+
+FilaRecomendacaoService ..> ConsumidorFila         : mensagem via SQS
+
+' ─────────────────────────────────────────────
+' ORDENAÇÃO VERTICAL
+' ─────────────────────────────────────────────
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+Model      -[hidden]down- "RecomendacaoService (FastAPI)"
+
+@enduml

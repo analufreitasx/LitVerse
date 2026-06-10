@@ -1,0 +1,234 @@
+@startuml UC05_ImportarHistoricoGoodreads
+
+title UC05 — Importar Histórico do Goodreads\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class ImportacaoController {
+    - importacaoService : ImportacaoGoodreadsService
+    + importarHistorico(usuarioId: String, arquivo: MultipartFile) : ResponseEntity<ImportacaoResultado>
+    + consultarStatusImportacao(importacaoId: String) : ResponseEntity<ImportacaoJob>
+  }
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class ImportacaoGoodreadsService {
+    - goodreadsCsvParser    : GoodreadsCsvParser
+    - livroRepository       : LivroRepository
+    - estanteRepository     : EstanteRepository
+    - importacaoRepository  : ImportacaoRepository
+    - buscaLivroExternoService : BuscaLivroExternoService
+    + iniciarImportacao(usuarioId: String, arquivo: MultipartFile) : ImportacaoJob
+    + processarImportacao(job: ImportacaoJob) : ImportacaoResultado
+    - resolverLivro(registro: GoodreadsRegistro) : Livro
+    - mapearStatusGoodreads(shelf: String) : StatusLeitura
+    - salvarItemEstante(usuarioId: String, livro: Livro, registro: GoodreadsRegistro) : EstanteItem
+  }
+
+  class GoodreadsCsvParser {
+    + parsear(arquivo: MultipartFile) : List<GoodreadsRegistro>
+    - validarCabecalho(cabecalho: String[]) : void
+    - parsearLinha(linha: String[]) : GoodreadsRegistro
+    - parsearData(valor: String) : LocalDate
+  }
+
+  class BuscaLivroExternoService {
+    - googleBooksApiUrl : String
+    + buscarPorIsbn(isbn: String) : Livro
+    + buscarPorTitulo(titulo: String) : List<Livro>
+  }
+
+  ImportacaoGoodreadsService --> GoodreadsCsvParser       : usa
+  ImportacaoGoodreadsService --> BuscaLivroExternoService : usa
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class LivroRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Livro
+    + findByIsbn(isbn: String) : Livro
+    + findByTitulo(titulo: String) : List<Livro>
+    + save(livro: Livro) : Livro
+  }
+
+  class EstanteRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioId(usuarioId: String) : Estante
+    + findItemByEstanteIdELivroId(estanteId: String, livroId: String) : EstanteItem
+    + saveEstante(estante: Estante) : Estante
+    + saveItem(item: EstanteItem) : EstanteItem
+    + existsItemByEstanteIdELivroId(estanteId: String, livroId: String) : Boolean
+  }
+
+  class ImportacaoRepository {
+    - db : PostgreSQLClient
+    + save(job: ImportacaoJob) : ImportacaoJob
+    + update(job: ImportacaoJob) : ImportacaoJob
+    + findById(id: String) : ImportacaoJob
+    + findByUsuarioId(usuarioId: String) : List<ImportacaoJob>
+  }
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class GoodreadsRegistro {
+    - bookId         : String
+    - titulo         : String
+    - autores        : String
+    - isbn           : String
+    - isbn13         : String
+    - minhaAvaliacao : Integer
+    - mediaAvaliacao : Float
+    - editora        : String
+    - numeroPaginas  : Integer
+    - anoPublicacao  : Integer
+    - dataLeitura    : LocalDate
+    - dataAdicionado : LocalDate
+    - shelf          : String
+    - resenha        : String
+  }
+
+  class ImportacaoJob {
+    - id           : String
+    - usuarioId    : String
+    - status       : StatusImportacao
+    - totalRegistros    : Integer
+    - importados        : Integer
+    - ignorados         : Integer
+    - erros             : Integer
+    - criadoEm     : LocalDateTime
+    - atualizadoEm : LocalDateTime
+  }
+
+  class ImportacaoResultado {
+    - jobId          : String
+    - totalRegistros : Integer
+    - importados     : Integer
+    - ignorados      : Integer
+    - erros          : Integer
+    - mensagem       : String
+  }
+
+  class Livro {
+    - id            : String
+    - isbn          : String
+    - titulo        : String
+    - autores       : List<String>
+    - generos       : List<String>
+    - sinopse       : String
+    - capaCoverUrl  : String
+    - numeroPaginas : Integer
+    - anoPublicacao : Integer
+    - editora       : String
+    - idioma        : String
+  }
+
+  class Estante {
+    - id           : String
+    - usuarioId    : String
+    - criadaEm     : LocalDateTime
+    - atualizadaEm : LocalDateTime
+    + getItens() : List<EstanteItem>
+    + getTotalLivros() : Integer
+    + getItensPorStatus(status: StatusLeitura) : List<EstanteItem>
+  }
+
+  class EstanteItem {
+    - id            : String
+    - estanteId     : String
+    - livroId       : String
+    - status        : StatusLeitura
+    - progresso     : Integer
+    - dataInicio    : LocalDate
+    - dataConclusao : LocalDate
+    - avaliacao     : Float
+    - resenha       : String
+    - criadoEm      : LocalDateTime
+    - atualizadoEm  : LocalDateTime
+  }
+
+  enum StatusLeitura {
+    LENDO
+    LIDO
+    QUERO_LER
+    ABANDONADO
+  }
+
+  enum StatusImportacao {
+    PENDENTE
+    PROCESSANDO
+    CONCLUIDO
+    ERRO
+  }
+
+  Estante       "1"   *-- "0..*" EstanteItem    : contém
+  EstanteItem   -->              StatusLeitura   : usa
+  EstanteItem   -->              Livro           : referencia
+  ImportacaoJob -->              StatusImportacao : usa
+}
+
+' ─────────────────────────────────────────────
+' DELEGAÇÕES: Controller → Service
+' ─────────────────────────────────────────────
+ImportacaoController --> ImportacaoGoodreadsService : delega
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Service → Repository
+' ─────────────────────────────────────────────
+ImportacaoGoodreadsService --> LivroRepository      : usa
+ImportacaoGoodreadsService --> EstanteRepository    : usa
+ImportacaoGoodreadsService --> ImportacaoRepository : usa
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Service → Model (DTOs / objetos)
+' ─────────────────────────────────────────────
+ImportacaoGoodreadsService ..> GoodreadsRegistro  : processa
+ImportacaoGoodreadsService ..> ImportacaoJob      : cria / atualiza
+ImportacaoGoodreadsService ..> ImportacaoResultado : retorna
+GoodreadsCsvParser         ..> GoodreadsRegistro  : produz
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Repository → Model
+' ─────────────────────────────────────────────
+LivroRepository      ..> Livro           : acessa
+EstanteRepository    ..> Estante         : acessa
+EstanteRepository    ..> EstanteItem     : acessa
+ImportacaoRepository ..> ImportacaoJob   : acessa
+
+' ─────────────────────────────────────────────
+' ORDENAÇÃO VISUAL DAS CAMADAS
+' ─────────────────────────────────────────────
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+
+@enduml

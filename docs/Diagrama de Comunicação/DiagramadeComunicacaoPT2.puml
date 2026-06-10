@@ -1,0 +1,143 @@
+@startuml LitVerse_D2_Conteudo_Metas
+
+title LitVerse — D2: Conteúdo & Metas (UC03, UC04, UC07, UC11, UC12, UC13)
+
+skinparam backgroundColor #FDFBFF
+skinparam defaultFontSize 11
+skinparam defaultFontName Arial
+
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontStyle bold
+  FontSize 11
+}
+skinparam actor {
+  BackgroundColor #F0EBFF
+  BorderColor #9B72D8
+  FontStyle bold
+  FontSize 11
+}
+skinparam sequence {
+  ArrowColor #6A4CA0
+  ArrowThickness 1.5
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FAF7FF
+  DividerBackgroundColor #EDE5FF
+  DividerBorderColor #C4ADEE
+  GroupBorderColor #9B72D8
+  GroupBackgroundColor #F0EBFF55
+  GroupFontColor #4B2E83
+  GroupFontStyle bold
+}
+skinparam note {
+  BackgroundColor #F5F0FF
+  BorderColor #C4ADEE
+  FontSize 10
+}
+
+actor "Leitor" as U
+
+participant "AvaliacaoController\n/ ResenhaController" as ARC
+participant "MetaLeituraController" as MLC
+participant "StreakController" as SC
+
+participant "AvaliarLivroService\n/ ResenhaService" as AVS
+participant "MetaLeituraService" as MLS
+participant "StreakService\n/ RegistroLeituraService" as SS
+
+participant "Banco de Dados\n(PostgreSQL)" as DB
+participant "Redis (Cache)" as RD
+
+' ═══════════════════════════════════════════════
+' UC03 / UC04 — Avaliar Livro e Escrever Resenha
+' ═══════════════════════════════════════════════
+== UC03 / UC04 — Avaliar Livro e Escrever Resenha ==
+
+autonumber 1
+
+U -> ARC : avaliarLivro(dto: AvaliarLivroDTO)
+ARC -> AVS : avaliarLivro(dto)
+AVS -> DB : SELECT EstanteItem WHERE usuarioId AND livroId
+DB --> AVS : EstanteItem (valida livro na estante)
+AVS -> DB : INSERT Avaliacao
+DB --> AVS : Avaliacao
+AVS --> ARC : Avaliacao
+ARC --> U : 201 Created — Avaliacao
+
+autonumber 1
+
+U -> ARC : criarResenha(dto: ResenhaDTO)
+ARC -> AVS : criarResenha(dto)
+AVS -> DB : SELECT Avaliacao WHERE usuarioId AND livroId
+DB --> AVS : Avaliacao
+AVS -> DB : INSERT Resenha
+DB --> AVS : Resenha
+AVS --> ARC : Resenha
+ARC --> U : 201 Created — Resenha
+
+' ═══════════════════════════════════════════════
+' UC07 / UC11 — Definir e Acompanhar Metas
+' ═══════════════════════════════════════════════
+== UC07 / UC11 — Definir e Acompanhar Metas de Leitura ==
+
+autonumber 1
+
+U -> MLC : criarMeta(usuarioId, dto: CriarMetaDTO)
+MLC -> MLS : criarMeta(usuarioId, dto)
+MLS -> DB : INSERT MetaLeitura
+DB --> MLS : MetaLeitura
+MLS --> MLC : MetaLeitura
+MLC --> U : 201 Created — MetaLeitura
+
+autonumber 1
+
+U -> MLC : buscarProgresso(metaId, usuarioId)
+MLC -> MLS : buscarProgresso(metaId)
+MLS -> DB : SELECT MetaLeitura WHERE id=?
+DB --> MLS : MetaLeitura
+MLS -> DB : SELECT COUNT(EstanteItem WHERE status=LIDO AND periodo)
+DB --> MLS : total lidos
+MLS -> DB : INSERT RegistroProgressoMeta
+DB --> MLS : RegistroProgressoMeta
+MLS --> MLC : ProgressoMetaDTO
+MLC --> U : 200 OK — ProgressoMetaDTO
+
+' ═══════════════════════════════════════════════
+' UC12 / UC13 — Streak de Leitura
+' ═══════════════════════════════════════════════
+== UC12 / UC13 — Registrar Leitura Diária e Visualizar Streak ==
+
+autonumber 1
+
+U -> SC : registrarLeitura(usuarioId, dto: RegistroLeituraDTO)
+SC -> SS : registrarLeitura(usuarioId, dto)
+SS -> DB : SELECT RegistroDiario WHERE usuarioId AND livroId AND data
+DB --> SS : false (sem duplicata)
+SS -> DB : UPDATE EstanteItem.progresso
+DB --> SS : EstanteItem
+SS -> DB : INSERT RegistroDiario
+DB --> SS : RegistroDiario
+SS -> SS : recalcularStreak(usuarioId)
+SS -> DB : UPDATE StreakLeitura
+DB --> SS : StreakLeitura
+SS -> RD : invalidarCache streak:{usuarioId}
+SS --> SC : RegistroDiario
+SC --> U : 201 Created — RegistroDiario
+
+autonumber 1
+
+U -> SC : visualizarStreak(usuarioId)
+SC -> SS : visualizarStreak(usuarioId)
+SS -> RD : GET cache streak:{usuarioId}
+alt cache hit
+  RD --> SS : StreakLeitura
+else cache miss
+  SS -> DB : SELECT StreakLeitura WHERE usuarioId=?
+  DB --> SS : StreakLeitura
+  SS -> RD : SET cache streak:{usuarioId}
+end
+SS --> SC : StreakDTO
+SC --> U : 200 OK — StreakDTO
+
+@enduml

@@ -1,0 +1,167 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC20 — Gerenciar Contas de Usuários
+
+actor Admin
+participant "App\n(Mobile)" as App
+participant "UsuarioAdmin\nController" as Controller
+participant "AdminGuard" as Guard
+participant "UsuarioAdmin\nService" as Service
+participant "Notificacao\nService" as NotifService
+participant "UsuarioRepository" as UsuarioRepo
+participant "LogAcaoAdmin\nRepository" as LogRepo
+database "PostgreSQL" as DB
+
+== Autorização ==
+
+Admin -> App : Acessa painel administrativo
+activate App
+
+App -> Controller : Requisição com JWT no header
+activate Controller
+
+Controller -> Guard : canActivate(context)
+activate Guard
+Guard -> UsuarioRepo : findById(adminId)
+activate UsuarioRepo
+UsuarioRepo -> DB : SELECT usuario WHERE id = adminId
+activate DB
+DB --> UsuarioRepo : Usuario
+deactivate DB
+UsuarioRepo --> Guard : Usuario
+deactivate UsuarioRepo
+Guard -> Guard : validarPerfil(adminId)
+
+alt [perfil != ADMIN]
+  Guard --> Controller : false
+  Controller --> App : 403 Forbidden
+  App --> Admin : Acesso negado
+else [perfil == ADMIN]
+  Guard --> Controller : true
+end
+deactivate Guard
+
+== Listar Usuários ==
+
+Admin -> App : Informa filtros (nome, status, perfil)
+App -> Controller : GET /admin/usuarios?filtro={...}
+Controller -> Service : listarUsuarios(filtro)
+activate Service
+Service -> UsuarioRepo : findAll(filtro)
+activate UsuarioRepo
+UsuarioRepo -> DB : SELECT usuarios com filtros
+activate DB
+DB --> UsuarioRepo : List<Usuario>
+deactivate DB
+UsuarioRepo --> Service : List<Usuario>
+deactivate UsuarioRepo
+Service --> Controller : List<Usuario>
+deactivate Service
+Controller --> App : 200 OK — lista de usuários
+App --> Admin : Exibe lista de usuários
+
+== Atualizar Usuário ==
+
+Admin -> App : Edita dados (nome, email, perfil)
+App -> Controller : PUT /admin/usuarios/{usuarioId} {dto}
+Controller -> Service : atualizarUsuario(adminId, usuarioId, dto)
+activate Service
+Service -> Service : validarEmailUnico(email, usuarioId)
+Service -> UsuarioRepo : update(usuario)
+activate UsuarioRepo
+UsuarioRepo -> DB : UPDATE usuario SET ...
+activate DB
+DB --> UsuarioRepo : Usuario atualizado
+deactivate DB
+UsuarioRepo --> Service : Usuario atualizado
+deactivate UsuarioRepo
+Service -> LogRepo : save(log: ATUALIZACAO)
+activate LogRepo
+LogRepo -> DB : INSERT log_acao_admin
+activate DB
+DB --> LogRepo : ok
+deactivate DB
+deactivate LogRepo
+Service --> Controller : Usuario atualizado
+deactivate Service
+Controller --> App : 200 OK
+App --> Admin : Confirmação da atualização
+
+== Alterar Status da Conta (Suspender / Reativar / Encerrar) ==
+
+Admin -> App : Seleciona ação sobre a conta
+App -> Controller : PATCH /admin/usuarios/{usuarioId}/{acao}
+Controller -> Service : suspenderConta() | reativarConta() | encerrarConta()
+activate Service
+Service -> UsuarioRepo : update(usuario: novoStatus)
+activate UsuarioRepo
+UsuarioRepo -> DB : UPDATE usuario SET status = {SUSPENSA | ATIVA | ENCERRADA}
+activate DB
+DB --> UsuarioRepo : ok
+deactivate DB
+UsuarioRepo --> Service : ok
+deactivate UsuarioRepo
+Service -> LogRepo : save(log: {SUSPENSAO | REATIVACAO | ENCERRAMENTO})
+activate LogRepo
+LogRepo -> DB : INSERT log_acao_admin
+activate DB
+DB --> LogRepo : ok
+deactivate DB
+deactivate LogRepo
+Service -> NotifService : enviarEmailStatusConta(usuario, novoStatus)
+activate NotifService
+NotifService --> Service : ok
+deactivate NotifService
+Service --> Controller : ok
+deactivate Service
+Controller --> App : 200 OK
+App --> Admin : Status da conta atualizado
+deactivate Controller
+deactivate App
+
+@enduml

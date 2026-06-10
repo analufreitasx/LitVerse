@@ -1,0 +1,168 @@
+@startuml UC02 - Atualizar Status e Progresso de Leitura
+
+title UC02 - Atualizar Status e Progresso de Leitura\n<size:11></size>
+
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor #F0EBFF
+    BorderColor #C4ADEE
+    ArrowColor #333333
+    FontName Arial
+    FontSize 12
+    HeaderBackgroundColor #F0EBFF
+}
+
+skinparam package {
+    BackgroundColor #F0EBFF
+    BorderColor #C4ADEE
+    FontStyle Bold
+    FontSize 13
+}
+
+' ─────────────────────────────────────────
+'  CAMADA MODELO
+' ─────────────────────────────────────────
+package "Model" {
+
+      class Livro {
+    - id : String
+    - isbn : String
+    - titulo : String
+    - autores : List<String>
+    - generos : List<String>
+    - sinopse : String
+    - capaCoverUrl : String
+    - numeroPaginas : Integer
+    - anoPublicacao : Integer
+    - editora : String
+    - idioma : String
+  }
+
+  class EstanteItem {
+    - id : String
+    - usuarioId : String
+    - livroId : String
+    - status : StatusLeitura
+    - progresso : Integer
+    - dataInicio : LocalDate
+    - dataConclusao : LocalDate
+    - avaliacao : Float
+    - resenha : String
+    - criadoEm : LocalDateTime
+    - atualizadoEm : LocalDateTime
+    - historicoProgresso : HistoricoProgressoLeitura []
+  }
+
+  enum StatusLeitura {
+    LENDO
+    LIDO
+    QUERO_LER
+    ABANDONADO
+  }
+
+    class HistoricoProgressoLeitura {
+        - id: string
+        - idLivro: string
+        - paginaAnterior: number
+        - novaPagina: number
+        - statusAnterior: StatusLeitura
+        - novoStatus: StatusLeitura
+        - registradoEm: Date
+    }
+
+}
+
+' ─────────────────────────────────────────
+'  CAMADA REPOSITÓRIO
+' ─────────────────────────────────────────
+package "Repository" {
+
+
+    class LivroRepository {
+        - bancoDados: ConexaoBancoDados
+        + buscarPorIdUsuarioEIdLivro(idUsuario: string, idLivro: string): LivroDoUsuario
+        + listarPorIdUsuario(idUsuario: string): LivroDoUsuario[]
+        + salvar(livroDoUsuario: LivroDoUsuario): LivroDoUsuario
+        + atualizar(livroDoUsuario: LivroDoUsuario): LivroDoUsuario
+    }
+
+      class EstanteRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioId(usuarioId: String) : List<EstanteItem>
+    + findByUsuarioIdELivroId(usuarioId: String, livroId: String) : EstanteItem
+    + save(item: EstanteItem) : EstanteItem
+    + existsByUsuarioIdELivroId(usuarioId: String, livroId: String) : Boolean
+  }
+
+    class HistoricoProgressoRepository {
+        - bancoDados: ConexaoBancoDados
+        + salvar(historico: HistoricoProgressoLeitura): HistoricoProgressoLeitura
+        + listarPorIdLivroDoUsuario(idLivroDoUsuario: string): HistoricoProgressoLeitura[]
+    }
+
+}
+
+' ─────────────────────────────────────────
+'  CAMADA SERVIÇO
+' ─────────────────────────────────────────
+package "Service" {
+
+    class AtualizarProgressoLeituraDTO {
+        + idLivroDoUsuario: string
+        + novoStatus: StatusLeitura
+        + paginaAtual: number
+    }
+
+
+    class ProgressoLeituraService {
+        - livroDoUsuarioRepository: LivroDoUsuarioRepository
+        - historicoProgressoRepositorio: HistoricoProgressoRepository
+        + atualizarProgresso(idUsuario: string, dto: AtualizarProgressoLeituraDTO): EstanteItem
+        - validarNumeroPagina(paginaAtual: number, totalPaginas: number): void
+        - construirHistorico(livro: Livro, dto: AtualizarProgressoLeituraDTO): HistoricoProgressoLeitura
+
+}
+
+' ─────────────────────────────────────────
+'  CAMADA CONTROLADOR
+' ─────────────────────────────────────────
+package "Controller" {
+
+    class ProgressoLeituraController {
+        - progressoLeituraService: ProgressoLeituraService
+        + atualizarProgresso(idUsuario: string, dto: AtualizarProgressoLeituraDTO): EstanteItem
+    }
+
+}
+
+' ─────────────────────────────────────────
+'  RELACIONAMENTOS — MODELO
+' ─────────────────────────────────────────
+Livro "1" --> "1" StatusLeitura      : possui >
+HistoricoProgressoLeitura "0..*" --> "1" EstanteItem : pertence a >
+
+' ─────────────────────────────────────────
+'  RELACIONAMENTOS — REPOSITORY
+' ─────────────────────────────────────────
+
+LivroRepository ..> Livro             : gerencia >
+EstanteRepository ..> EstanteItem            : gerencia >
+HistoricoProgressoRepository ..> HistoricoProgressoLeitura : gerencia >
+
+' ─────────────────────────────────────────
+'  RELACIONAMENTOS — SERVICE
+' ─────────────────────────────────────────
+ProgressoLeituraService --> LivroRepository      : usa >
+ProgressoLeituraService --> HistoricoProgressoRepository  : usa >
+ProgressoLeituraService ..> AtualizarProgressoLeituraDTO     : recebe >
+ProgressoLeituraService ..> Livro                   : opera sobre >
+ProgressoLeituraService ..> HistoricoProgressoLeitura        : cria >
+
+' ─────────────────────────────────────────
+'  RELACIONAMENTOS — CONTROLlER
+' ─────────────────────────────────────────
+ProgressoLeituraController --> ProgressoLeituraService    : delega para >
+ProgressoLeituraController ..> AtualizarProgressoLeituraDTO : recebe >
+ProgressoLeituraController ..> HistoricoProgressoLeitura  : retorna >
+
+@enduml

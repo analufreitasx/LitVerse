@@ -1,0 +1,189 @@
+@startuml UC17_ListasPublicas
+
+title UC17 — Criar e Explorar Listas Públicas de Livros\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class ListaLivrosController {
+    - criarListaService    : CriarListaService
+    - explorarListaService : ExplorarListaService
+    + criarLista(usuarioId: String, dto: ListaDTO) : ResponseEntity
+    + adicionarLivro(usuarioId: String, listaId: String, livroId: String) : ResponseEntity
+    + removerLivro(usuarioId: String, listaId: String, livroId: String) : ResponseEntity
+    + editarLista(usuarioId: String, listaId: String, dto: ListaDTO) : ResponseEntity
+    + excluirLista(usuarioId: String, listaId: String) : ResponseEntity
+    + explorarListas(dto: FiltroListaDTO) : ResponseEntity
+    + buscarListasPorUsuario(usuarioId: String) : ResponseEntity
+  }
+
+  class ListaDTO {
+    + titulo    : String
+    + descricao : String
+    + publica   : Boolean
+  }
+
+  class FiltroListaDTO {
+    + termo   : String
+    + ordenar : OrdenacaoLista
+    + pagina  : Integer
+    + limite  : Integer
+  }
+
+  ListaLivrosController ..> ListaDTO      : recebe
+  ListaLivrosController ..> FiltroListaDTO : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class CriarListaService {
+    - listaRepository     : ListaLivrosRepository
+    - listaItemRepository : ListaItemRepository
+    - livroRepository     : LivroRepository
+    + criarLista(usuarioId: String, dto: ListaDTO) : ListaLivros
+    + adicionarLivro(usuarioId: String, listaId: String, livroId: String) : ListaItem
+    + removerLivro(usuarioId: String, listaId: String, livroId: String) : void
+    + editarLista(usuarioId: String, listaId: String, dto: ListaDTO) : ListaLivros
+    + excluirLista(usuarioId: String, listaId: String) : void
+    - validarProprietario(lista: ListaLivros, usuarioId: String) : void
+    - validarLivroJaNaLista(listaId: String, livroId: String) : void
+  }
+
+  class ExplorarListaService {
+    - listaRepository : ListaLivrosRepository
+    + explorarListasPublicas(filtro: FiltroListaDTO) : List<ListaLivros>
+    + buscarListasPorUsuario(usuarioId: String) : List<ListaLivros>
+  }
+
+  CriarListaService    ..> ListaDTO       : recebe
+  ExplorarListaService ..> FiltroListaDTO : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class ListaLivrosRepository {
+    - db : PostgreSQLClient
+    + save(lista: ListaLivros) : ListaLivros
+    + findById(listaId: String) : ListaLivros
+    + findByUsuarioId(usuarioId: String) : List<ListaLivros>
+    + findPublicasComFiltro(filtro: FiltroListaDTO) : List<ListaLivros>
+    + update(lista: ListaLivros) : ListaLivros
+    + deleteById(listaId: String) : void
+  }
+
+  class ListaItemRepository {
+    - db : PostgreSQLClient
+    + save(item: ListaItem) : ListaItem
+    + findByListaId(listaId: String) : List<ListaItem>
+    + deleteByListaIdELivroId(listaId: String, livroId: String) : void
+    + existsByListaIdELivroId(listaId: String, livroId: String) : Boolean
+  }
+
+  class LivroRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Livro
+    + findByIsbn(isbn: String) : Livro
+    + save(livro: Livro) : Livro
+  }
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class ListaLivros {
+    - id           : String
+    - usuarioId    : String
+    - titulo       : String
+    - descricao    : String
+    - publica      : Boolean
+    - criadaEm     : LocalDateTime
+    - atualizadaEm : LocalDateTime
+    + getItens() : List<ListaItem>
+    + getTotalLivros() : Integer
+  }
+
+  class ListaItem {
+    - id           : String
+    - listaId      : String
+    - livroId      : String
+    - ordem        : Integer
+    - adicionadoEm : LocalDateTime
+  }
+
+  class Livro {
+    - id            : String
+    - isbn          : String
+    - titulo        : String
+    - autores       : List<String>
+    - generos       : List<String>
+    - capaCoverUrl  : String
+    - numeroPaginas : Integer
+    - anoPublicacao : Integer
+  }
+
+  enum OrdenacaoLista {
+    MAIS_CURTIDAS
+    MAIS_RECENTES
+    MAIS_LIVROS
+    RELEVANCIA
+  }
+
+  ListaLivros "1" *-- "0..*" ListaItem : contém
+  ListaItem   -->             Livro     : referencia
+  FiltroListaDTO --> OrdenacaoLista     : usa
+}
+
+' ─────────────────────────────────────────────
+' DELEGAÇÕES: Controller → Service
+' ─────────────────────────────────────────────
+ListaLivrosController --> CriarListaService    : delega
+ListaLivrosController --> ExplorarListaService : delega
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Service → Repository
+' ─────────────────────────────────────────────
+CriarListaService    --> ListaLivrosRepository : usa
+CriarListaService    --> ListaItemRepository   : usa
+CriarListaService    --> LivroRepository       : usa
+ExplorarListaService --> ListaLivrosRepository : usa
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Repository → Model
+' ─────────────────────────────────────────────
+ListaLivrosRepository ..> ListaLivros : acessa
+ListaItemRepository   ..> ListaItem   : acessa
+LivroRepository       ..> Livro       : acessa
+
+' ─────────────────────────────────────────────
+' ORDENAÇÃO VERTICAL DAS CAMADAS
+' ─────────────────────────────────────────────
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+
+@enduml

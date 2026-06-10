@@ -1,0 +1,150 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC011 — Acompanhar progresso de metas
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "MetaLeitura\nController" as Controller
+participant "MetaLeitura\nService" as Service
+participant "MetaLeitura\nRepository" as MetaRepo
+participant "Progresso\nMetaRepository" as ProgressoRepo
+participant "Estante\nRepository" as EstanteRepo
+database "PostgreSQL" as DB
+
+== Carregar resumo das metas ==
+
+Leitor -> App : Acessa seção de Metas e Hábitos
+activate App
+
+App -> Controller : GET /goals/resumo/{usuario_id}
+activate Controller
+
+Controller -> Service : buscarResumo(usuarioId)
+activate Service
+
+Service -> MetaRepo : findByUsuarioId(usuarioId)
+activate MetaRepo
+MetaRepo -> DB : SELECT metas WHERE usuario_id = ?
+activate DB
+DB --> MetaRepo : Retorna lista de MetaLeitura
+deactivate DB
+MetaRepo --> Service : List<MetaLeitura>
+deactivate MetaRepo
+
+Service --> Service : Monta ResumoMetasDTO\n(totalMetas, metasAtivas,\nmetasConcluidas, percentualGeral)
+
+Service --> Controller : ResumoMetasDTO
+deactivate Service
+
+Controller --> App : 200 OK — ResumoMetasDTO
+deactivate Controller
+
+App --> Leitor : Exibe painel geral com totais\ne percentual global de progresso
+deactivate App
+
+== Consultar progresso detalhado de uma meta ==
+
+Leitor -> App : Seleciona uma meta específica
+activate App
+
+App -> Controller : GET /goals/{meta_id}/progresso
+activate Controller
+
+Controller -> Service : buscarProgresso(metaId)
+activate Service
+
+Service -> MetaRepo : findById(metaId)
+activate MetaRepo
+MetaRepo -> DB : SELECT meta WHERE id = ?
+activate DB
+DB --> MetaRepo : Retorna MetaLeitura
+deactivate DB
+MetaRepo --> Service : MetaLeitura
+deactivate MetaRepo
+
+Service -> EstanteRepo : countLidosPorPeriodo(usuarioId,\ndataInicio, dataFim)
+activate EstanteRepo
+EstanteRepo -> DB : SELECT COUNT livros lidos\nno período da meta
+activate DB
+DB --> EstanteRepo : valorAtual (Integer)
+deactivate DB
+EstanteRepo --> Service : Integer
+deactivate EstanteRepo
+
+Service --> Service : calcularValorAtual(meta)\ncalcularPercentual()\natualizarStatus(meta)
+
+Service -> ProgressoRepo : findByMetaId(metaId)
+activate ProgressoRepo
+ProgressoRepo -> DB : SELECT registros WHERE meta_id = ?
+activate DB
+DB --> ProgressoRepo : List<RegistroProgressoMeta>
+deactivate DB
+ProgressoRepo --> Service : List<RegistroProgressoMeta>
+deactivate ProgressoRepo
+
+Service --> Controller : ProgressoMetaDTO\n(valorAlvo, valorAtual, percentual,\ndias Restantes, status)
+deactivate Service
+
+Controller --> App : 200 OK — ProgressoMetaDTO
+deactivate Controller
+
+App --> Leitor : Exibe barra de progresso, histórico\nde registros e dias restantes
+deactivate App
+
+== Fluxo alternativo: meta concluída ==
+
+alt [meta.isConcluida() = true]
+
+  note over App, Service
+    Ao montar o ProgressoMetaDTO, o Service
+    identifica status = CONCLUIDA e percentual = 100%
+  end note
+
+  App --> Leitor : Exibe selo de meta concluída\ne destaca conquista na tela
+end
+@enduml

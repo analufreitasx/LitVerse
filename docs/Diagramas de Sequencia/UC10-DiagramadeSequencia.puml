@@ -1,0 +1,156 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC10 — Receber Notificações e Recomendações Personalizadas
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "NotificacaoController\n(API)" as NotifCtrl
+participant "RecomendacaoController\n(API)" as RecCtrl
+participant "NotificacaoService" as NotifSvc
+participant "RecomendacaoConsultaService" as RecSvc
+participant "PushNotificacaoService" as PushSvc
+participant "FilaRecomendacaoService" as FilaSvc
+database "PostgreSQL /\nRedis" as DB
+participant "ConsumidorFila\n(FastAPI)" as Fila
+
+== Configurar preferências de notificação ==
+
+Leitor -> App : Acessa configurações de notificação
+activate App
+
+App -> NotifCtrl : PUT /notifications/config\n{usuarioId, ConfiguracaoNotificacaoDTO}
+activate NotifCtrl
+
+NotifCtrl -> NotifSvc : atualizarConfiguracoes(usuarioId, dto)
+activate NotifSvc
+
+NotifSvc -> DB : ConfiguracaoNotificacaoRepository\n.update(config)
+activate DB
+DB --> NotifSvc : ConfiguracaoNotificacao atualizada
+deactivate DB
+
+NotifSvc --> NotifCtrl : Retorna configuração salva
+deactivate NotifSvc
+
+NotifCtrl --> App : 200 OK
+deactivate NotifCtrl
+
+App --> Leitor : Exibe confirmação das preferências
+deactivate App
+
+== Receber feed personalizado de recomendações ==
+
+Leitor -> App : Acessa feed de recomendações
+activate App
+
+App -> RecCtrl : GET /recommendations/feed?usuarioId={id}
+activate RecCtrl
+
+RecCtrl -> RecSvc : getFeedPersonalizado(usuarioId)
+activate RecSvc
+
+RecSvc -> DB : RecomendacaoRepository\n.findFeedByUsuarioId(usuarioId)\n[busca cache Redis]
+activate DB
+DB --> RecSvc : retorno
+deactivate DB
+
+alt [cache válido — feed encontrado]
+  RecSvc --> RecCtrl : List<RecomendacaoItem>
+  deactivate RecSvc
+  RecCtrl --> App : Retorna feed personalizado
+  deactivate RecCtrl
+  App --> Leitor : Exibe recomendações do feed
+  deactivate App
+
+else [cache expirado — recálculo necessário]
+  RecSvc -> FilaSvc : enviarEventoNotificacao\n(usuarioId, RECOMENDACAO_PERSONALIZADA)
+  activate FilaSvc
+  FilaSvc --> RecSvc : Evento enfileirado (SQS)
+  deactivate FilaSvc
+
+  RecSvc --> RecCtrl : Lista parcial ou vazia
+  deactivate RecSvc
+  RecCtrl --> App : Retorna recomendações disponíveis
+  deactivate RecCtrl
+  App --> Leitor : Exibe feed (atualização em andamento)
+  deactivate App
+
+  Fila -> Fila : escutarFila() — consome evento SQS
+  activate Fila
+  Fila -> DB : RecomendacaoInicialService\n.gerarFeedPersonalizado(usuarioId)\nPerfilRepository.buscar / salvarFeed
+  activate DB
+  DB --> Fila : Feed recalculado e persistido
+  deactivate DB
+  deactivate Fila
+end
+
+== Enviar notificação push ao leitor ==
+
+NotifSvc -> DB : DispositivoRepository\n.findTokensByUsuarioId(usuarioId)
+activate NotifSvc
+activate DB
+DB --> NotifSvc : List<fcmToken>
+deactivate DB
+
+NotifSvc -> NotifSvc : construirMensagem(tipo, payload)
+
+NotifSvc -> PushSvc : enviarPush(token, titulo, corpo, dados)
+activate PushSvc
+PushSvc --> NotifSvc : Push entregue via FCM
+deactivate PushSvc
+
+NotifSvc -> DB : NotificacaoRepository\n.save(notificacao)
+activate DB
+DB --> NotifSvc : Notificacao persistida
+deactivate DB
+deactivate NotifSvc
+
+App --> Leitor : Recebe notificação push no dispositivo
+
+
+@enduml

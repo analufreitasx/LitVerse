@@ -1,0 +1,120 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC13 — Visualizar Sequência de Leitura (Streak)
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "StreakController" as Controller
+participant "StreakService" as Service
+participant "StreakRepository" as StreakRepo
+participant "RegistroDiarioRepository" as RegistroRepo
+database "Redis\n(Cache)" as Redis
+database "PostgreSQL" as DB
+
+== Visualizar Streak ==
+
+Leitor -> App : Acessa tela de streak
+activate App
+
+App -> Controller : GET /streak/{usuarioId}
+activate Controller
+
+Controller -> Service : visualizarStreak(usuarioId)
+activate Service
+
+Service -> StreakRepo : findByUsuarioId(usuarioId)
+activate StreakRepo
+
+StreakRepo -> Redis : Consulta cache do streak
+activate Redis
+
+alt [  -cache válido]
+  Redis --> StreakRepo : Retorna StreakLeitura em cache
+  deactivate Redis
+  StreakRepo --> Service : Retorna StreakLeitura
+  deactivate StreakRepo
+
+else [cache expirado ou ausente]
+  deactivate Redis
+  StreakRepo -> DB : SELECT streak WHERE usuarioId
+  activate DB
+  DB --> StreakRepo : Retorna StreakLeitura
+  deactivate DB
+  StreakRepo --> Service : Retorna StreakLeitura
+  deactivate StreakRepo
+
+end
+
+Service -> RegistroRepo : findByUsuarioIdEPeriodo(usuarioId, inicioMes, fimMes)
+activate RegistroRepo
+RegistroRepo -> DB : SELECT registros do mês atual
+activate DB
+DB --> RegistroRepo : Retorna List<RegistroDiario>
+deactivate DB
+RegistroRepo --> Service : Retorna List<RegistroDiario>
+deactivate RegistroRepo
+
+note right of Service
+  calcularSequenciaAtual()
+  calcularMaiorSequencia()
+  determina StatusStreak:
+  ATIVA · EM_RISCO · PERDIDA · CONGELADA
+end note
+
+Service -> Service : Monta StreakDTO\n(sequenciaAtual, maiorSequencia,\nultimoRegistro, freezesDisponiveis,\ndiaNoMes, status)
+
+Service --> Controller : Retorna StreakDTO
+deactivate Service
+
+Controller --> App : Retorna StreakDTO
+deactivate Controller
+
+App --> Leitor : Exibe streak, calendário do mês\ne status da sequência
+deactivate App
+
+@enduml

@@ -1,0 +1,69 @@
+@startuml
+skinparam backgroundColor #F9F7FF
+
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+
+skinparam rectangle {
+  BackgroundColor #F4F0FF
+  BorderColor #B89FE8
+  BorderThickness 1.5
+  FontColor #6B4FA8
+  FontSize 13
+  FontStyle bold
+  RoundCorner 12
+}
+
+skinparam note {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 11
+}
+
+skinparam shadowing false
+
+title Diagrama de Atores — LitVerse
+
+
+rectangle "Atores Primários" {
+  actor Leitor
+  actor Administrador
+}
+
+rectangle "Atores Secundários (Sistema)" {
+  actor "API de Catálogo\nde Livros" as API2
+  actor "Serviço de\nNotificações" as Notif2
+}
+
+note right of Leitor
+  Usuário principal da plataforma.
+  Registra leituras, avalia livros,
+  participa de comunidades e
+  recebe recomendações.
+end note
+
+note right of Administrador
+  Gerencia o catálogo, modera
+  conteúdo, administra contas
+  e configura a gamificação.
+end note
+
+note right of API2
+  Fornece metadados dos livros:
+  título, autor, sinopse, capa
+  e ISBN (ex: Google Books API).
+end note
+
+note right of Notif2
+  Responsável pelo envio de
+  push notifications: lembretes,
+  alertas de clube e resumos.
+end note
+
+@enduml

@@ -1,0 +1,196 @@
+@startuml US01_US02_US06_EstanteLiteraria
+
+title US01 – Adicionar Livro à Estante\nUS02 – Atualizar Status e Progresso de Leitura\nUS06 – Visualizar Estante Literária\nDiagrama de Estados
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+
+skinparam state {
+  BackgroundColor      #E8D5F5
+  BorderColor          #7B2FA8
+  FontColor            #1A0033
+  FontSize             12
+  FontStyle            plain
+  ArrowColor           #5A1A8A
+  ArrowThickness       1.5
+  StartColor           #3D0066
+  EndColor             #3D0066
+  AttributeFontColor   #2D0050
+  AttributeFontSize    11
+}
+
+skinparam note {
+  BackgroundColor #F3E8FF
+  BorderColor     #7B2FA8
+  FontSize        11
+  FontColor       #2D0050
+}
+
+note "**Transições principais:**\n[leitor_inicia_busca]        -> Buscando Livro\n[livro_encontrado]           -> Aguardando Confirmação\n[livro_nao_encontrado]       -> Não Encontrado\n[usuario_confirma]           -> Adicionado à Estante\n[usuario_cancela]            -> Cancelado\n[leitor_acessa_estante]      -> Carregando Estante\n[estante_carregada]          -> Estante Exibida\n[leitor_seleciona_livro]     -> Livro em Edição\n[progresso_valido]           -> Progresso Atualizado\n[status_LIDO]                -> Leitura Concluída\n[status_ABANDONADO]          -> Leitura Abandonada\n[sessao_encerrada]           -> Arquivado" as N1
+
+' ══════════════════════════════════════
+'  PONTO DE ENTRADA
+' ══════════════════════════════════════
+[*] --> EstanteInativa
+
+state EstanteInativa {
+  usuarioId     : definido
+  totalLivros   : 0
+  statusEstante : "vazia"
+}
+
+' ══════════════════════════════════════
+'  US01 — ADICIONAR LIVRO À ESTANTE
+' ══════════════════════════════════════
+EstanteInativa -down-> BuscandoLivro : [leitor_inicia_busca]\nobterOuCriarEstante()\nprepararBusca()
+
+state BuscandoLivro {
+  queryAtiva    : true
+  fonteConsulta : "BD local / Google Books API"
+  resultados    : "[]"
+}
+
+BuscandoLivro -right-> NaoEncontrado        : [livro_nao_encontrado]\nnotificarLeitor()
+BuscandoLivro -down->  AguardandoConfirmacao : [livro_encontrado]\nexibirDetalhesLivro()
+
+state NaoEncontrado {
+  mensagem : "Livro não localizado"
+  sugestao : "Tente título ou ISBN diferente"
+}
+
+NaoEncontrado --> BuscandoLivro  : [leitor_tenta_novamente]\nreiniciarBusca()
+NaoEncontrado --> EstanteInativa : [leitor_cancela]\ncancelarOperacao()
+
+state AguardandoConfirmacao {
+  livroPreSelecionado : true
+  statusSugerido      : "QUERO_LER"
+  aguardandoStatus    : true
+}
+
+AguardandoConfirmacao -right-> Cancelado       : [usuario_cancela]\ncancelarOperacao()
+AguardandoConfirmacao -down->  AdicionadoEstante : [usuario_confirma]\nvalidarLivroJaNaEstante()\nadicionarLivro()\nsalvarEstanteItem()
+
+state Cancelado {
+  operacao : "cancelada"
+  estante  : "inalterada"
+}
+
+Cancelado --> EstanteInativa : [retorno_estante]\nredirecionarEstante()
+
+state AdicionadoEstante {
+  statusInicial : "QUERO_LER | LENDO | LIDO | ABANDONADO"
+  progresso     : 0
+  dataInicio    : "hoje (se LENDO)"
+  dataConclusao : "hoje (se LIDO)"
+  itemSalvo     : true
+}
+
+' ══════════════════════════════════════
+'  US06 — VISUALIZAR ESTANTE LITERÁRIA
+' ══════════════════════════════════════
+AdicionadoEstante -down-> CarregandoEstante : [leitor_acessa_estante]\nbuscarEstanteCompleta()\naplicarFiltros()
+
+EstanteInativa -down-> CarregandoEstante : [leitor_acessa_estante]\nbuscarEstanteCompleta()
+
+state CarregandoEstante {
+  filtroStatus  : "TODOS | LENDO | LIDO | QUERO_LER | ABANDONADO"
+  paginando     : true
+  consultaAtiva : true
+}
+
+CarregandoEstante -down->  EstanteExibida   : [estante_carregada]\nmapearEstante()\nexibirResumo()
+CarregandoEstante -right-> ErroCarregamento : [falha_consulta]\nnotificarErro()
+
+state ErroCarregamento {
+  mensagemErro : "Falha ao carregar estante"
+  tentativas   : 0
+}
+
+ErroCarregamento --> CarregandoEstante : [leitor_tenta_novamente]\nreiniciarConsulta()
+
+state EstanteExibida {
+  totalLivros    : "calculado"
+  itensVisiveis  : "filtrados"
+  resumoExibido  : true
+  filtroAplicado : "ativo"
+}
+
+' ══════════════════════════════════════
+'  US02 — ATUALIZAR STATUS E PROGRESSO
+' ══════════════════════════════════════
+EstanteExibida -down-> LivroEmEdicao : [leitor_seleciona_livro]\ncarregarEstanteItem()\nexibirFormEdicao()
+
+state LivroEmEdicao {
+  itemCarregado     : true
+  campoPagina       : "editavel"
+  campoStatus       : "editavel"
+  alteracaoPendente : false
+}
+
+LivroEmEdicao -right-> EstanteExibida    : [leitor_cancela_edicao]\ndescartarAlteracoes()
+LivroEmEdicao -down->  ValidandoProgresso : [leitor_salva_alteracao]\nvalidarNumeroPagina()\nconstruirHistorico()
+
+state ValidandoProgresso {
+  paginaInformada : "pendente"
+  validacaoAtiva  : true
+}
+
+ValidandoProgresso -right-> ErroPaginaInvalida : [pagina_invalida]\nexibirMensagemErro()
+ValidandoProgresso -down->  ProgressoAtualizado : [progresso_valido]\natualizarEstanteItem()\nsalvarHistoricoProgresso()
+
+state ErroPaginaInvalida {
+  mensagem : "Página fora do intervalo permitido"
+  campo    : "destacado"
+}
+
+ErroPaginaInvalida --> LivroEmEdicao : [leitor_corrige]\nfocoCampoPagina()
+
+state ProgressoAtualizado {
+  progressoSalvo      : true
+  historicoRegistrado : true
+  atualizadoEm        : "agora"
+}
+
+ProgressoAtualizado -right-> LeituraEmAndamento : [status_LENDO]\nmanterDataInicio()
+ProgressoAtualizado -down->  LeituraConcluida   : [status_LIDO]\nregistrarDataConclusao()\nnotificarConclusao()
+ProgressoAtualizado -left->  LeituraAbandonada  : [status_ABANDONADO]\nregistrarAbandonado()\nresetarStreakSeNecessario()
+
+state LeituraEmAndamento {
+  status        : "LENDO"
+  streakAtivo   : true
+  lembreteAtivo : true
+}
+
+LeituraEmAndamento --> LivroEmEdicao  : [leitor_atualiza_novamente]\nrecarregarFormEdicao()
+LeituraEmAndamento --> EstanteExibida : [leitor_volta_estante]\natualizarVisualizacao()
+
+state LeituraConcluida {
+  status         : "LIDO"
+  dataConclusao  : "registrada"
+  xpConcedido    : true
+  metaAtualizada : true
+}
+
+LeituraConcluida --> EstanteExibida : [leitor_volta_estante]\natualizarVisualizacao()
+
+state LeituraAbandonada {
+  status             : "ABANDONADO"
+  motivoRegistrado   : "opcional"
+  streakInterrompida : true
+}
+
+LeituraAbandonada --> EstanteExibida : [leitor_volta_estante]\natualizarVisualizacao()
+
+' ══════════════════════════════════════
+'  ESTADO TERMINAL
+' ══════════════════════════════════════
+EstanteExibida --> Arquivado : [sessao_encerrada]\nfecharSessao()\narquivarEstado()
+
+state Arquivado {
+  statusSessao : "arquivada"
+  auditoria    : "registrada"
+}
+
+Arquivado --> [*]
+
+@enduml

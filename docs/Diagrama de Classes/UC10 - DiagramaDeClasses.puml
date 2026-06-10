@@ -1,0 +1,263 @@
+@startuml UC_NotificacoesRecomendacoes
+
+title UC 10 — Receber Notificações e Recomendações Personalizadas\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class NotificacaoController {
+    - notificacaoService : NotificacaoService
+    + listarNotificacoes(usuarioId: String, pagina: Integer) : ResponseEntity
+    + marcarComoLida(usuarioId: String, notificacaoId: String) : ResponseEntity
+    + atualizarConfiguracoes(usuarioId: String, dto: ConfiguracaoNotificacaoDTO) : ResponseEntity
+  }
+
+  class RecomendacaoController {
+    - recomendacaoService : RecomendacaoConsultaService
+    + getFeedPersonalizado(usuarioId: String) : ResponseEntity
+    + getRecomendacoesPorContexto(usuarioId: String, dto: FiltroContextoDTO) : ResponseEntity
+  }
+
+  class ConfiguracaoNotificacaoDTO {
+    + lembreteAtivado    : Boolean
+    + horarioLembrete    : LocalTime
+    + resumoSemanal      : Boolean
+    + alertasClube       : Boolean
+    + novosLancamentos   : Boolean
+  }
+
+  class FiltroContextoDTO {
+    + contexto : ContextoRecomendacao
+    + limite   : Integer
+  }
+
+  NotificacaoController  ..> ConfiguracaoNotificacaoDTO : recebe
+  RecomendacaoController ..> FiltroContextoDTO          : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE (NestJS)
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class NotificacaoService {
+    - notificacaoRepository        : NotificacaoRepository
+    - configuracaoNotifRepository  : ConfiguracaoNotificacaoRepository
+    - pushNotificacaoService       : PushNotificacaoService
+    + listarNotificacoes(usuarioId: String, pagina: Integer) : List<Notificacao>
+    + marcarComoLida(usuarioId: String, notificacaoId: String) : void
+    + atualizarConfiguracoes(usuarioId: String, dto: ConfiguracaoNotificacaoDTO) : ConfiguracaoNotificacao
+    + enviarNotificacao(usuarioId: String, tipo: TipoNotificacao, payload: dict) : void
+    - construirMensagem(tipo: TipoNotificacao, payload: dict) : String
+  }
+
+  class RecomendacaoConsultaService {
+    - recomendacaoRepository : RecomendacaoRepository
+    - redisCache             : RedisClient
+    + getFeedPersonalizado(usuarioId: String) : List<RecomendacaoItem>
+    + getRecomendacoesPorContexto(usuarioId: String, filtro: FiltroContextoDTO) : List<RecomendacaoItem>
+    - buscarDoCache(chave: String) : List<RecomendacaoItem>
+  }
+
+  class PushNotificacaoService {
+    - fcmApiUrl : String
+    + enviarPush(token: String, titulo: String, corpo: String, dados: dict) : void
+    + enviarPushEmLote(tokens: List<String>, titulo: String, corpo: String) : void
+  }
+
+  ' reutilizada do UC08/UC09 — acrescenta enviarEventoNotificacao
+  class FilaRecomendacaoService {
+    - filaUrl : String
+    + enviarEvento(usuarioId: String, prefs: PreferenciasLeitura) : void
+    + enviarEventoInteracao(usuarioId: String, payload: dict) : void
+    + enviarEventoNotificacao(usuarioId: String, tipo: TipoNotificacao) : void
+  }
+
+  NotificacaoService --> PushNotificacaoService    : envia push via FCM
+  NotificacaoService ..> ConfiguracaoNotificacaoDTO : recebe
+  RecomendacaoConsultaService --> FilaRecomendacaoService : solicita recálculo via SQS
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class NotificacaoRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioId(usuarioId: String, pagina: Integer) : List<Notificacao>
+    + save(notificacao: Notificacao) : Notificacao
+    + marcarComoLida(id: String) : void
+    + findNaoLidasPorUsuario(usuarioId: String) : List<Notificacao>
+  }
+
+  class ConfiguracaoNotificacaoRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioId(usuarioId: String) : ConfiguracaoNotificacao
+    + save(config: ConfiguracaoNotificacao) : ConfiguracaoNotificacao
+    + update(config: ConfiguracaoNotificacao) : ConfiguracaoNotificacao
+  }
+
+  class RecomendacaoRepository {
+    - db    : PostgreSQLClient
+    - redis : RedisClient
+    + findFeedByUsuarioId(usuarioId: String) : List<RecomendacaoItem>
+    + findPorContexto(usuarioId: String, contexto: ContextoRecomendacao) : List<RecomendacaoItem>
+    + salvarFeed(usuarioId: String, itens: List<RecomendacaoItem>) : void
+    + invalidarCache(usuarioId: String) : void
+  }
+
+  class DispositivoRepository {
+    - db : PostgreSQLClient
+    + findTokensByUsuarioId(usuarioId: String) : List<String>
+    + saveToken(usuarioId: String, token: String, plataforma: String) : void
+    + removeToken(token: String) : void
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class Notificacao {
+    - id         : String
+    - usuarioId  : String
+    - tipo       : TipoNotificacao
+    - titulo     : String
+    - corpo      : String
+    - lida       : Boolean
+    - dados      : dict
+    - criadaEm   : LocalDateTime
+  }
+
+  class ConfiguracaoNotificacao {
+    - id                  : String
+    - usuarioId           : String
+    - lembreteAtivado     : Boolean
+    - horarioLembrete     : LocalTime
+    - resumoSemanal       : Boolean
+    - alertasClube        : Boolean
+    - novosLancamentos    : Boolean
+    - atualizadoEm        : LocalDateTime
+  }
+
+  class RecomendacaoItem {
+    - id          : String
+    - usuarioId   : String
+    - livroId     : String
+    - livroTitulo : String
+    - capaUrl     : String
+    - contexto    : ContextoRecomendacao
+    - score       : Float
+    - geradoEm    : LocalDateTime
+  }
+
+  class DispositivoUsuario {
+    - id          : String
+    - usuarioId   : String
+    - fcmToken    : String
+    - plataforma  : String
+    - ativadoEm   : LocalDateTime
+  }
+
+  enum TipoNotificacao {
+    RECOMENDACAO_PERSONALIZADA
+    RESUMO_SEMANAL
+    LEMBRETE_LEITURA
+    LANCAMENTO_AUTOR
+    ALERTA_CLUBE
+  }
+
+  enum ContextoRecomendacao {
+    FIM_DE_SEMANA
+    PARECIDO_COM_ULTIMO
+    CURTO_E_INTENSO
+    FEED_PERSONALIZADO
+  }
+
+  Notificacao        --> TipoNotificacao       : classifica
+  RecomendacaoItem   --> ContextoRecomendacao  : categoriza
+}
+
+' ─────────────────────────────────────────────
+' SERVIÇO DE RECOMENDAÇÃO (FastAPI — Python)
+' Consome fila SQS e gera/atualiza feed
+' ─────────────────────────────────────────────
+package "RecomendacaoService (FastAPI)" <<Rectangle>> {
+
+  ' reutilizada do UC08/UC09
+  class ConsumidorFila {
+    - filaUrl : String
+    + escutarFila() : void
+    + processarMensagem(mensagem: dict) : void
+  }
+
+  ' reutilizada do UC08/UC09 — acrescenta gerarFeedPersonalizado
+  class RecomendacaoInicialService {
+    - perfilRepository : PerfilRepository
+    + gerarRecomendacoes(usuarioId: String, prefs: dict) : void
+    + atualizarPerfil(usuarioId: String, prefs: dict) : void
+    + gerarFeedPersonalizado(usuarioId: String) : List<dict>
+  }
+
+  ' reutilizada do UC08/UC09
+  class PerfilRepository {
+    - redis : RedisClient
+    - db    : PostgreSQLClient
+    + salvar(usuarioId: String, perfil: dict) : void
+    + buscar(usuarioId: String) : dict
+    + limparCache(usuarioId: String) : void
+    + buscarSimilares(usuarioId: String) : List<dict>
+    + salvarSimilares(usuarioId: String, similares: List<dict>) : void
+  }
+
+  ConsumidorFila             --> RecomendacaoInicialService : delega
+  RecomendacaoInicialService --> PerfilRepository           : usa
+}
+
+' ─────────────────────────────────────────────
+' LIGAÇÕES ENTRE CAMADAS
+' ─────────────────────────────────────────────
+NotificacaoController  --> NotificacaoService          : delega
+RecomendacaoController --> RecomendacaoConsultaService  : delega
+
+NotificacaoService          --> NotificacaoRepository             : usa
+NotificacaoService          --> ConfiguracaoNotificacaoRepository : usa
+NotificacaoService          --> DispositivoRepository             : usa
+RecomendacaoConsultaService --> RecomendacaoRepository            : usa
+
+NotificacaoRepository             ..> Notificacao              : acessa
+ConfiguracaoNotificacaoRepository ..> ConfiguracaoNotificacao  : acessa
+RecomendacaoRepository            ..> RecomendacaoItem         : acessa
+DispositivoRepository             ..> DispositivoUsuario       : acessa
+
+FilaRecomendacaoService ..> ConsumidorFila : mensagem via SQS
+
+' ─────────────────────────────────────────────
+' ORDENAÇÃO VERTICAL
+' ─────────────────────────────────────────────
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+Model      -[hidden]down- "RecomendacaoService (FastAPI)"
+
+@enduml

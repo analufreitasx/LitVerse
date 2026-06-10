@@ -1,0 +1,105 @@
+@startuml
+skinparam backgroundColor #F9F7FF
+
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+
+skinparam usecase {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 11
+  ArrowColor #B89FE8
+  ArrowFontColor #7B5EA7
+  ArrowFontSize 10
+}
+
+skinparam rectangle {
+  BackgroundColor #F4F0FF
+  BorderColor #B89FE8
+  BorderThickness 1.5
+  FontColor #6B4FA8
+  FontSize 13
+  FontStyle bold
+  RoundCorner 12
+}
+
+skinparam shadowing false
+
+left to right direction
+
+actor Leitor
+actor Administrador
+
+rectangle "LitVerse" {
+
+  rectangle "Estante Pessoal" {
+    (UC01 - Adicionar livro à estante)
+    (UC02 - Atualizar status e progresso de leitura)
+    (UC03 - Avaliar livro)
+    (UC04 - Escrever resenha)
+    (UC05 - Importar histórico do Goodreads)
+    (UC06 - Visualizar estante literária)
+  }
+
+  rectangle "Descoberta Inteligente" {
+    (UC08 - Configurar preferências de leitura)
+    (UC09 - Explorar livros por filtros emocionais e usuários similares)
+    (UC10 - Receber notificações e recomendações personalizadas)
+  }
+
+  rectangle "Metas e Hábitos" {
+    (UC07 - Definir metas de leitura)
+    (UC11 - Acompanhar progresso de metas)
+    (UC12 - Registrar leitura diária)
+    (UC13 - Visualizar sequência de leitura)
+  }
+
+  rectangle "Comunidade Literária" {
+    (UC14 - Criar clube do livro)
+    (UC15 - Participar de clube do livro)
+    (UC16 - Discutir capítulos em grupo)
+    (UC17 - Criar e explorar listas públicas de livros)
+  }
+
+  rectangle "Administração" {
+    (UC18 - Editar catálogo de livros)
+    (UC19 - Editar informações de livro)
+    (UC20 - Gerenciar contas de usuários)
+  }
+}
+
+Leitor -- (UC01 - Adicionar livro à estante)
+Leitor -- (UC02 - Atualizar status e progresso de leitura)
+Leitor -- (UC03 - Avaliar livro)
+Leitor -- (UC04 - Escrever resenha)
+Leitor -- (UC05 - Importar histórico do Goodreads)
+Leitor -- (UC08 - Configurar preferências de leitura)
+Leitor -- (UC09 - Explorar livros por filtros emocionais e usuários similares)
+Leitor -- (UC10 - Receber notificações e recomendações personalizadas)
+Leitor -- (UC07 - Definir metas de leitura)
+Leitor -- (UC11 - Acompanhar progresso de metas)
+Leitor -- (UC12 - Registrar leitura diária)
+Leitor -- (UC13 - Visualizar sequência de leitura)
+Leitor -- (UC14 - Criar clube do livro)
+Leitor -- (UC15 - Participar de clube do livro)
+Leitor -- (UC17 - Criar e explorar listas públicas de livros)
+Leitor -- (UC06 - Visualizar estante literária)
+
+Administrador -- (UC18 - Editar catálogo de livros)
+Administrador -- (UC19 - Editar informações de livro)
+Administrador -- (UC20 - Gerenciar contas de usuários)
+
+(UC01 - Adicionar livro à estante) .down.> (UC06 - Visualizar estante literária) : <<include>>
+(UC03 - Avaliar livro) .down.> (UC04 - Escrever resenha) : <<extends>>
+(UC15 - Participar de clube do livro) .down.> (UC16 - Discutir capítulos em grupo) : <<include>>
+(UC12 - Registrar leitura diária) .down.> (UC13 - Visualizar sequência de leitura) : <<include>>
+(UC07 - Definir metas de leitura) .down.> (UC11 - Acompanhar progresso de metas) : <<include>>
+(UC14 - Criar clube do livro) .down.> (UC16 - Discutir capítulos em grupo) : <<include>>
+(UC18 - Editar catálogo de livros) .down.> (UC19 - Editar informações de livro) : <<extends>>
+@enduml

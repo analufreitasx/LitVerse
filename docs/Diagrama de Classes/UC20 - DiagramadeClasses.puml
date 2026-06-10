@@ -1,0 +1,198 @@
+@startuml UC20_GerenciarContasUsuarios
+
+title UC20 — Gerenciar Contas de Usuários\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class UsuarioAdminController {
+    - usuarioAdminService : UsuarioAdminService
+    - adminGuard          : AdminGuard
+    + listarUsuarios(filtro: FiltroUsuarioDTO) : ResponseEntity
+    + buscarUsuarioPorId(usuarioId: String) : ResponseEntity
+    + atualizarUsuario(adminId: String, usuarioId: String, dto: AtualizarUsuarioDTO) : ResponseEntity
+    + suspenderConta(adminId: String, usuarioId: String, motivo: String) : ResponseEntity
+    + reativarConta(adminId: String, usuarioId: String) : ResponseEntity
+    + encerrarConta(adminId: String, usuarioId: String) : ResponseEntity
+  }
+
+  class FiltroUsuarioDTO {
+    + nome          : String
+    + email         : String
+    + status        : StatusConta
+    + perfil        : PerfilUsuario
+    + pagina        : Integer
+    + itensPorPagina : Integer
+  }
+
+  class AtualizarUsuarioDTO {
+    + nome   : String
+    + email  : String
+    + perfil : PerfilUsuario
+  }
+
+  UsuarioAdminController ..> FiltroUsuarioDTO    : recebe
+  UsuarioAdminController ..> AtualizarUsuarioDTO : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: GUARD / SEGURANÇA
+' ─────────────────────────────────────────────
+package "Guard" <<Rectangle>> {
+
+  class AdminGuard {
+    - jwtService        : JwtService
+    - usuarioRepository : UsuarioRepository
+    + canActivate(context: ExecutionContext) : Boolean
+    - extrairToken(request: Request) : String
+    - validarPerfil(usuarioId: String) : Boolean
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class UsuarioAdminService {
+    - usuarioRepository    : UsuarioRepository
+    - logAcaoAdminRepository : LogAcaoAdminRepository
+    - notificacaoService   : NotificacaoService
+    + listarUsuarios(filtro: FiltroUsuarioDTO) : List<Usuario>
+    + buscarPorId(usuarioId: String) : Usuario
+    + atualizarUsuario(adminId: String, usuarioId: String, dto: AtualizarUsuarioDTO) : Usuario
+    + suspenderConta(adminId: String, usuarioId: String, motivo: String) : void
+    + reativarConta(adminId: String, usuarioId: String) : void
+    + encerrarConta(adminId: String, usuarioId: String) : void
+    - validarEmailUnico(email: String, usuarioId: String) : void
+    - registrarLog(adminId: String, acao: AcaoAdmin, usuarioId: String, detalhe: String) : void
+  }
+
+  class NotificacaoService {
+    + enviarEmailStatusConta(usuario: Usuario, status: StatusConta) : void
+  }
+
+  UsuarioAdminService --> NotificacaoService : notifica via
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class UsuarioRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Usuario
+    + findAll(filtro: FiltroUsuarioDTO) : List<Usuario>
+    + findByEmail(email: String) : Usuario
+    + save(usuario: Usuario) : Usuario
+    + update(usuario: Usuario) : Usuario
+    + existsByEmail(email: String) : Boolean
+  }
+
+  class LogAcaoAdminRepository {
+    - db : PostgreSQLClient
+    + save(log: LogAcaoAdmin) : LogAcaoAdmin
+    + findByUsuarioId(usuarioId: String) : List<LogAcaoAdmin>
+    + findByAdminId(adminId: String) : List<LogAcaoAdmin>
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class Usuario {
+    - id           : String
+    - nome         : String
+    - email        : String
+    - senhaHash    : String
+    - perfil       : PerfilUsuario
+    - status       : StatusConta
+    - motivoSuspensao : String
+    - criadoEm    : LocalDateTime
+    - atualizadoEm : LocalDateTime
+  }
+
+  class LogAcaoAdmin {
+    - id          : String
+    - adminId     : String
+    - usuarioId   : String
+    - acao        : AcaoAdmin
+    - detalhe     : String
+    - realizadaEm : LocalDateTime
+  }
+
+  enum PerfilUsuario {
+    LEITOR
+    ADMIN
+  }
+
+  enum StatusConta {
+    ATIVA
+    SUSPENSA
+    ENCERRADA
+  }
+
+  enum AcaoAdmin {
+    ATUALIZACAO
+    SUSPENSAO
+    REATIVACAO
+    ENCERRAMENTO
+  }
+
+  Usuario      --> PerfilUsuario : possui
+  Usuario      --> StatusConta   : possui
+  LogAcaoAdmin --> AcaoAdmin     : classifica
+  LogAcaoAdmin --> Usuario       : referencia
+}
+
+' ─────────────────────────────────────────────
+' DELEGAÇÕES: Controller → Guard / Service
+' ─────────────────────────────────────────────
+UsuarioAdminController --> AdminGuard          : protegido por
+UsuarioAdminController --> UsuarioAdminService : delega
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Guard → Repository
+' ─────────────────────────────────────────────
+AdminGuard --> UsuarioRepository : valida perfil via
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Service → Repository
+' ─────────────────────────────────────────────
+UsuarioAdminService --> UsuarioRepository       : usa
+UsuarioAdminService --> LogAcaoAdminRepository  : usa
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Repository → Model
+' ─────────────────────────────────────────────
+UsuarioRepository       ..> Usuario      : acessa
+LogAcaoAdminRepository  ..> LogAcaoAdmin : acessa
+
+Controller -[hidden]down- Guard
+Guard      -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+
+@enduml

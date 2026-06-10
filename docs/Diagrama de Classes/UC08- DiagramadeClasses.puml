@@ -1,0 +1,189 @@
+@startuml UC08_ConfigurarPreferenciasLeitura
+
+title UC08 — Configurar Preferências Iniciais de Leitura\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class PreferenciasController {
+    - preferenciasService : PreferenciasService
+    + salvarPreferencias(usuarioId: String, dto: PreferenciasDTO) : ResponseEntity
+    + buscarPreferencias(usuarioId: String) : ResponseEntity
+    + atualizarPreferencias(usuarioId: String, dto: PreferenciasDTO) : ResponseEntity
+  }
+
+  class PreferenciasDTO {
+    + generosPreferidos  : List<String>
+    + idiomasPreferidos  : List<String>
+    + autoresFavoritos   : List<String>
+    + moodsDeLeitura     : List<MoodLeitura>
+    + metaAnualLivros    : Integer
+    + tamanhoPreferido   : TamanhoLivro
+  }
+
+  PreferenciasController ..> PreferenciasDTO : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class PreferenciasService {
+    - preferenciasRepository : PreferenciasRepository
+    - usuarioRepository      : UsuarioRepository
+    - filaRecomendacao       : FilaRecomendacaoService
+    + salvarPreferencias(usuarioId: String, dto: PreferenciasDTO) : PreferenciasLeitura
+    + buscarPreferencias(usuarioId: String) : PreferenciasLeitura
+    + atualizarPreferencias(usuarioId: String, dto: PreferenciasDTO) : PreferenciasLeitura
+    - usuarioExiste(usuarioId: String) : Boolean
+    - notificarRecomendacao(usuarioId: String) : void
+  }
+
+  class FilaRecomendacaoService {
+    - filaUrl : String
+    + enviarEvento(usuarioId: String, prefs: PreferenciasLeitura) : void
+  }
+
+  PreferenciasService --> FilaRecomendacaoService : notifica via SQS
+  PreferenciasService ..> PreferenciasDTO         : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class PreferenciasRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioId(usuarioId: String) : PreferenciasLeitura
+    + save(prefs: PreferenciasLeitura) : PreferenciasLeitura
+    + update(prefs: PreferenciasLeitura) : PreferenciasLeitura
+    + existsByUsuarioId(usuarioId: String) : Boolean
+  }
+
+  class UsuarioRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Usuario
+    + atualizarPerfilConfigurado(usuarioId: String, status: Boolean) : void
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class Usuario {
+    - id                 : String
+    - nome               : String
+    - email              : String
+    - perfilConfigurado  : Boolean
+    - criadoEm           : LocalDateTime
+  }
+
+  class PreferenciasLeitura {
+    - id                : String
+    - usuarioId         : String
+    - generosPreferidos : List<String>
+    - idiomasPreferidos : List<String>
+    - autoresFavoritos  : List<String>
+    - moodsDeLeitura    : List<MoodLeitura>
+    - metaAnualLivros   : Integer
+    - tamanhoPreferido  : TamanhoLivro
+    - criadoEm          : LocalDateTime
+    - atualizadoEm      : LocalDateTime
+  }
+
+  enum MoodLeitura {
+    TENSO
+    RECONFORTANTE
+    FILOSOFICO
+    LEVE
+    AVENTUREIRO
+    ROMANTICO
+    MISTERIOSO
+  }
+
+  enum TamanhoLivro {
+    CURTO
+    MEDIO
+    LONGO
+    QUALQUER
+  }
+
+  PreferenciasLeitura --> MoodLeitura  : usa
+  PreferenciasLeitura --> TamanhoLivro : usa
+  Usuario "1" -- "1" PreferenciasLeitura : possui
+}
+
+' ─────────────────────────────────────────────
+' SERVIÇO DE RECOMENDAÇÃO (FastAPI — Python)
+' Recebe eventos da fila SQS e gera o perfil
+' ─────────────────────────────────────────────
+package "RecomendacaoService (FastAPI)" <<Rectangle>> {
+
+  class ConsumidorFila {
+    - filaUrl : String
+    + escutarFila() : void
+    + processarMensagem(mensagem: dict) : void
+  }
+
+  class RecomendacaoInicialService {
+    - perfilRepository : PerfilRepository
+    + gerarRecomendacoes(usuarioId: String, prefs: dict) : void
+    + atualizarPerfil(usuarioId: String, prefs: dict) : void
+  }
+
+  class PerfilRepository {
+    - redis : RedisClient
+    - db    : PostgreSQLClient
+    + salvar(usuarioId: String, perfil: dict) : void
+    + buscar(usuarioId: String) : dict
+    + limparCache(usuarioId: String) : void
+  }
+
+  ConsumidorFila             --> RecomendacaoInicialService : delega
+  RecomendacaoInicialService --> PerfilRepository           : usa
+}
+
+' ─────────────────────────────────────────────
+' LIGAÇÕES ENTRE CAMADAS
+' ─────────────────────────────────────────────
+PreferenciasController --> PreferenciasService     : delega
+
+PreferenciasService --> PreferenciasRepository     : usa
+PreferenciasService --> UsuarioRepository          : usa
+
+PreferenciasRepository ..> PreferenciasLeitura     : acessa
+UsuarioRepository      ..> Usuario                 : acessa
+
+FilaRecomendacaoService ..> ConsumidorFila         : mensagem via SQS
+
+' ─────────────────────────────────────────────
+' ORDENAÇÃO VERTICAL
+' ─────────────────────────────────────────────
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+Model      -[hidden]down- "RecomendacaoService (FastAPI)"
+
+@enduml

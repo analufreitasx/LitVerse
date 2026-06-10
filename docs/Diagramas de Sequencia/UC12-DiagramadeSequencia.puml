@@ -1,0 +1,134 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC12 — Registrar Leitura Diária
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "StreakController" as Controller
+participant "RegistroLeituraService" as RegService
+participant "StreakService" as StreakService
+database "PostgreSQL" as DB
+database "Redis" as Redis
+
+== Registrar leitura diária ==
+
+Leitor -> App : Informa páginas lidas e\nseleciona livro em andamento
+activate App
+
+App -> Controller : POST /streak/registrar\n{usuarioId, livroId, paginasLidas, dataRegistro}
+activate Controller
+
+Controller -> RegService : registrarLeitura(usuarioId, dto)
+activate RegService
+
+RegService -> DB : existsByUsuarioIdELivroIdEData\n(usuarioId, livroId, dataRegistro)
+activate DB
+DB --> RegService : false
+deactivate DB
+
+alt [registro duplicado]
+  RegService --> Controller : lança exceção DuplicateRegistroException
+  Controller --> App : 409 Conflict — "Leitura já registrada para hoje"
+  App --> Leitor : Exibe aviso de registro duplicado
+  deactivate RegService
+  deactivate Controller
+  deactivate App
+
+else [registro válido]
+
+  RegService -> DB : save(RegistroDiario)
+  activate DB
+  DB --> RegService : RegistroDiario persistido
+  deactivate DB
+
+  RegService -> DB : findItemByUsuarioIdELivroId\n(usuarioId, livroId)
+  activate DB
+  DB --> RegService : EstanteItem atual
+  deactivate DB
+
+  RegService -> DB : updateProgresso(itemId, novasPaginas)
+  activate DB
+  DB --> RegService : EstanteItem atualizado
+  deactivate DB
+
+  RegService -> StreakService : recalcularStreak(usuarioId)
+  activate StreakService
+
+  StreakService -> DB : findByUsuarioIdEPeriodo\n(usuarioId, inicio, fim)
+  activate DB
+  DB --> StreakService : List<RegistroDiario>
+  deactivate DB
+
+  StreakService -> StreakService : calcularSequenciaAtual(registros)
+  StreakService -> StreakService : calcularMaiorSequencia(registros)
+
+  StreakService -> DB : update(StreakLeitura)
+  activate DB
+  DB --> StreakService : StreakLeitura atualizada
+  deactivate DB
+
+  StreakService -> Redis : invalidarCache(usuarioId)
+  activate Redis
+  Redis --> StreakService : cache invalidado
+  deactivate Redis
+
+  StreakService --> RegService : StreakLeitura recalculada
+  deactivate StreakService
+
+  RegService --> Controller : RegistroDiario + StreakLeitura
+  deactivate RegService
+
+  Controller --> App : 201 Created — registro e streak atualizados
+  deactivate Controller
+
+  App --> Leitor : Exibe progresso registrado\ne sequência de leitura atualizada
+  deactivate App
+
+end
+
+@enduml

@@ -1,0 +1,180 @@
+@startuml UC07_UC11_MetasLeitura
+
+title UC07 — Definir Metas de Leitura\nUC11 — Acompanhar Progresso das Metas\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class MetaLeituraController {
+    - metaService : MetaLeituraService
+    --
+    + criarMeta(usuarioId: String, dto: CriarMetaDTO) : ResponseEntity
+    + editarMeta(metaId: String, dto: EditarMetaDTO) : ResponseEntity
+    + excluirMeta(metaId: String, usuarioId: String) : ResponseEntity
+    + listarMetas(usuarioId: String, status: StatusMeta) : ResponseEntity
+    + buscarProgresso(metaId: String, usuarioId: String) : ResponseEntity
+    + buscarResumo(usuarioId: String) : ResponseEntity
+  }
+}
+
+' ─────────────────────────────────────────────
+' SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class MetaLeituraService {
+    - metaRepository      : MetaLeituraRepository
+    - progressoRepository : ProgressoMetaRepository
+    - estanteRepository   : EstanteRepository
+    --
+    + criarMeta(usuarioId: String, dto: CriarMetaDTO) : MetaLeitura
+    + editarMeta(metaId: String, dto: EditarMetaDTO) : MetaLeitura
+    + excluirMeta(metaId: String, usuarioId: String) : void
+    + listarMetas(usuarioId: String, status: StatusMeta) : List<MetaLeitura>
+    + buscarProgresso(metaId: String) : ProgressoMetaDTO
+    + buscarResumo(usuarioId: String) : ResumoMetasDTO
+    - calcularValorAtual(meta: MetaLeitura) : Integer
+    - atualizarStatus(meta: MetaLeitura) : void
+  }
+}
+
+' ─────────────────────────────────────────────
+' REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class MetaLeituraRepository {
+    - db : PostgreSQLClient
+    --
+    + findById(id: String) : MetaLeitura
+    + findByUsuarioId(usuarioId: String) : List<MetaLeitura>
+    + findByUsuarioIdEStatus(usuarioId: String, status: StatusMeta) : List<MetaLeitura>
+    + save(meta: MetaLeitura) : MetaLeitura
+    + update(meta: MetaLeitura) : MetaLeitura
+    + delete(id: String) : void
+  }
+
+  class ProgressoMetaRepository {
+    - db : PostgreSQLClient
+    --
+    + findByMetaId(metaId: String) : List<RegistroProgressoMeta>
+    + save(registro: RegistroProgressoMeta) : RegistroProgressoMeta
+  }
+
+  class EstanteRepository {
+    - db : PostgreSQLClient
+    --
+    + countLidosPorPeriodo(usuarioId: String, inicio: LocalDate, fim: LocalDate) : Integer
+    + countPaginasPorPeriodo(usuarioId: String, inicio: LocalDate, fim: LocalDate) : Integer
+    + countPorGenero(usuarioId: String, genero: String, inicio: LocalDate, fim: LocalDate) : Integer
+  }
+}
+
+' ─────────────────────────────────────────────
+' MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class MetaLeitura {
+    - id           : String
+    - usuarioId    : String
+    - titulo       : String
+    - tipo         : TipoMeta
+    - status       : StatusMeta
+    - valorAlvo    : Integer
+    - valorAtual   : Integer
+    - generoAlvo   : String
+    - dataInicio   : LocalDate
+    - dataFim      : LocalDate
+    - criadaEm     : LocalDateTime
+    - atualizadaEm : LocalDateTime
+    --
+    + calcularPercentual() : Float
+    + isConcluida() : Boolean
+  }
+
+  class RegistroProgressoMeta {
+    - id            : String
+    - metaId        : String
+    - valorAnterior : Integer
+    - novoValor     : Integer
+    - registradoEm  : LocalDateTime
+  }
+
+  class ProgressoMetaDTO {
+    + metaId        : String
+    + titulo        : String
+    + valorAlvo     : Integer
+    + valorAtual    : Integer
+    + percentual    : Float
+    + diasRestantes : Integer
+    + status        : StatusMeta
+  }
+
+  class ResumoMetasDTO {
+    + totalMetas      : Integer
+    + metasAtivas     : Integer
+    + metasConcluidas : Integer
+    + percentualGeral : Float
+  }
+
+  enum TipoMeta {
+    LIVROS_POR_ANO
+    LIVROS_POR_MES
+    PAGINAS_POR_MES
+    GENERO_ESPECIFICO
+    PERSONALIZADA
+  }
+
+  enum StatusMeta {
+    ATIVA
+    CONCLUIDA
+    EXPIRADA
+    PAUSADA
+  }
+
+  MetaLeitura "1" *-- "0..*" RegistroProgressoMeta : registra
+  MetaLeitura --> TipoMeta   : usa
+  MetaLeitura --> StatusMeta : usa
+}
+
+' ─────────────────────────────────────────────
+' RELAÇÕES
+' ─────────────────────────────────────────────
+MetaLeituraController --> MetaLeituraService      : delega
+
+MetaLeituraService --> MetaLeituraRepository      : usa
+MetaLeituraService --> ProgressoMetaRepository    : usa
+MetaLeituraService --> EstanteRepository          : usa
+MetaLeituraService ..> MetaLeitura                : cria / atualiza
+MetaLeituraService ..> ProgressoMetaDTO           : retorna
+MetaLeituraService ..> ResumoMetasDTO             : retorna
+
+MetaLeituraRepository   ..> MetaLeitura           : acessa
+ProgressoMetaRepository ..> RegistroProgressoMeta : acessa
+
+' ─────────────────────────────────────────────
+' ORDENAÇÃO VERTICAL DAS CAMADAS
+' ─────────────────────────────────────────────
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+
+@enduml

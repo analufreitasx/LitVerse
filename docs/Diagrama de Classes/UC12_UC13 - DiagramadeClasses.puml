@@ -1,0 +1,205 @@
+@startuml US12_US13_RegistroStreakLeitura
+
+title US12 — Registrar Leitura Diária\nUS13 — Visualizar Sequência de Leitura (Streak)\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class StreakController {
+    - registroLeituraService : RegistroLeituraService
+    - streakService          : StreakService
+    --
+    + registrarLeitura(usuarioId: String, dto: RegistroLeituraDTO) : ResponseEntity
+    + visualizarStreak(usuarioId: String) : ResponseEntity
+    + historicoRegistros(usuarioId: String, mes: Integer, ano: Integer) : ResponseEntity
+  }
+
+  class RegistroLeituraDTO {
+    + livroId      : String
+    + paginasLidas : Integer
+    + dataRegistro : LocalDate
+    + nota         : String
+  }
+
+  StreakController ..> RegistroLeituraDTO : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class RegistroLeituraService {
+    - registroRepository : RegistroDiarioRepository
+    - streakRepository   : StreakRepository
+    - estanteRepository  : EstanteRepository
+    --
+    + registrarLeitura(usuarioId: String, dto: RegistroLeituraDTO) : RegistroDiario
+    - validarRegistroDuplicado(usuarioId: String, livroId: String, data: LocalDate) : void
+    - atualizarProgressoEstante(usuarioId: String, livroId: String, paginas: Integer) : void
+  }
+
+  class StreakService {
+    - streakRepository   : StreakRepository
+    - registroRepository : RegistroDiarioRepository
+    --
+    + recalcularStreak(usuarioId: String) : StreakLeitura
+    + visualizarStreak(usuarioId: String) : StreakDTO
+    + aplicarFreeze(usuarioId: String) : StreakLeitura
+    - calcularSequenciaAtual(registros: List<RegistroDiario>) : Integer
+    - calcularMaiorSequencia(registros: List<RegistroDiario>) : Integer
+  }
+
+  RegistroLeituraService --> StreakService : notifica recálculo
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class RegistroDiarioRepository {
+    - db : PostgreSQLClient
+    --
+    + save(registro: RegistroDiario) : RegistroDiario
+    + findByUsuarioIdEData(usuarioId: String, data: LocalDate) : RegistroDiario
+    + findByUsuarioIdEPeriodo(usuarioId: String, inicio: LocalDate, fim: LocalDate) : List<RegistroDiario>
+    + existsByUsuarioIdELivroIdEData(usuarioId: String, livroId: String, data: LocalDate) : Boolean
+  }
+
+  class StreakRepository {
+    - db    : PostgreSQLClient
+    - redis : RedisClient
+    --
+    + findByUsuarioId(usuarioId: String) : StreakLeitura
+    + save(streak: StreakLeitura) : StreakLeitura
+    + update(streak: StreakLeitura) : StreakLeitura
+    + invalidarCache(usuarioId: String) : void
+  }
+
+  class EstanteRepository {
+    - db : PostgreSQLClient
+    --
+    + findItemByUsuarioIdELivroId(usuarioId: String, livroId: String) : EstanteItem
+    + updateProgresso(itemId: String, novasPaginas: Integer) : EstanteItem
+  }
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class RegistroDiario {
+    - id          : String
+    - usuarioId   : String
+    - livroId     : String
+    - paginasLidas: Integer
+    - dataRegistro: LocalDate
+    - nota        : String
+    - criadoEm    : LocalDateTime
+    --
+    + isPaginasValidas() : Boolean
+  }
+
+  class StreakLeitura {
+    - id               : String
+    - usuarioId        : String
+    - sequenciaAtual   : Integer
+    - maiorSequencia   : Integer
+    - ultimoRegistro   : LocalDate
+    - freezesDisponiveis : Integer
+    - freezesUsados    : Integer
+    - atualizadaEm     : LocalDateTime
+    --
+    + isAtiva() : Boolean
+    + podeFrezar() : Boolean
+  }
+
+  class StreakDTO {
+    + sequenciaAtual     : Integer
+    + maiorSequencia     : Integer
+    + ultimoRegistro     : LocalDate
+    + freezesDisponiveis : Integer
+    + diasNoMes          : List<LocalDate>
+    + status             : StatusStreak
+  }
+
+  class EstanteItem {
+    - id            : String
+    - usuarioId     : String
+    - livroId       : String
+    - status        : StatusLeitura
+    - progresso     : Integer
+    - dataInicio    : LocalDate
+    - dataConclusao : LocalDate
+    - atualizadoEm  : LocalDateTime
+  }
+
+  enum StatusStreak {
+    ATIVA
+    EM_RISCO
+    PERDIDA
+    CONGELADA
+  }
+
+  enum StatusLeitura {
+    LENDO
+    LIDO
+    QUERO_LER
+    ABANDONADO
+  }
+
+  StreakLeitura --> StatusStreak  : usa
+  EstanteItem   --> StatusLeitura : usa
+  StreakDTO     --> StatusStreak  : usa
+  StreakLeitura "1" ..> StreakDTO : origina
+}
+
+' ─────────────────────────────────────────────
+' DELEGAÇÕES: Controller → Service
+' ─────────────────────────────────────────────
+StreakController --> RegistroLeituraService : delega
+StreakController --> StreakService          : delega
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Service → Repository
+' ─────────────────────────────────────────────
+RegistroLeituraService --> RegistroDiarioRepository : usa
+RegistroLeituraService --> EstanteRepository        : usa
+RegistroLeituraService --> StreakRepository         : usa
+StreakService          --> StreakRepository          : usa
+StreakService          --> RegistroDiarioRepository  : usa
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Repository → Model
+' ─────────────────────────────────────────────
+RegistroDiarioRepository ..> RegistroDiario : acessa
+StreakRepository          ..> StreakLeitura  : acessa
+EstanteRepository         ..> EstanteItem   : acessa
+
+' ─────────────────────────────────────────────
+' ORDENAÇÃO VERTICAL DAS CAMADAS
+' ─────────────────────────────────────────────
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+
+@enduml

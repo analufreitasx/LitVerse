@@ -1,0 +1,210 @@
+@startuml UC18_UC19_GerenciamentoCatalogo
+
+title UC18 — Editar Catálogo de Livros\nUC19 — Editar Informações de um Livro\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  class CatalogoAdminController {
+    - catalogoAdminService : CatalogoAdminService
+    - authGuard            : AdminGuard
+    + listarLivros(filtro: FiltroCatalogoDTO) : ResponseEntity
+    + cadastrarLivro(adminId: String, dto: LivroDTO) : ResponseEntity
+    + editarLivro(adminId: String, livroId: String, dto: LivroDTO) : ResponseEntity
+    + removerLivro(adminId: String, livroId: String) : ResponseEntity
+    + buscarLivroPorId(livroId: String) : ResponseEntity
+  }
+
+  class FiltroCatalogoDTO {
+    + titulo      : String
+    + autor       : String
+    + genero      : String
+    + idioma      : String
+    + pagina      : Integer
+    + itensPorPagina : Integer
+  }
+
+  class LivroDTO {
+    + isbn          : String
+    + titulo        : String
+    + autores       : List<String>
+    + generos       : List<String>
+    + sinopse       : String
+    + capaCoverUrl  : String
+    + numeroPaginas : Integer
+    + anoPublicacao : Integer
+    + editora       : String
+    + idioma        : String
+  }
+
+  CatalogoAdminController ..> FiltroCatalogoDTO : recebe
+  CatalogoAdminController ..> LivroDTO          : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: GUARD / SEGURANÇA
+' ─────────────────────────────────────────────
+package "Guard" <<Rectangle>> {
+
+  class AdminGuard {
+    - jwtService    : JwtService
+    - usuarioRepository : UsuarioRepository
+    + canActivate(context: ExecutionContext) : Boolean
+    - extrairToken(request: Request) : String
+    - validarPerfil(usuarioId: String) : Boolean
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class CatalogoAdminService {
+    - livroRepository     : LivroRepository
+    - logAlteracaoRepository : LogAlteracaoRepository
+    + listarLivros(filtro: FiltroCatalogoDTO) : List<Livro>
+    + cadastrarLivro(adminId: String, dto: LivroDTO) : Livro
+    + editarLivro(adminId: String, livroId: String, dto: LivroDTO) : Livro
+    + removerLivro(adminId: String, livroId: String) : void
+    + buscarLivroPorId(livroId: String) : Livro
+    - validarIsbnUnico(isbn: String, livroId: String) : void
+    - registrarLog(adminId: String, acao: AcaoCatalogo, livroId: String) : void
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  class LivroRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Livro
+    + findByIsbn(isbn: String) : Livro
+    + findAll(filtro: FiltroCatalogoDTO) : List<Livro>
+    + save(livro: Livro) : Livro
+    + update(livro: Livro) : Livro
+    + delete(id: String) : void
+    + existsByIsbn(isbn: String) : Boolean
+  }
+
+  class UsuarioRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Usuario
+    + findPerfil(usuarioId: String) : PerfilUsuario
+  }
+
+  class LogAlteracaoRepository {
+    - db : PostgreSQLClient
+    + save(log: LogAlteracao) : LogAlteracao
+    + findByLivroId(livroId: String) : List<LogAlteracao>
+    + findByAdminId(adminId: String) : List<LogAlteracao>
+  }
+
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  class Livro {
+    - id            : String
+    - isbn          : String
+    - titulo        : String
+    - autores       : List<String>
+    - generos       : List<String>
+    - sinopse       : String
+    - capaCoverUrl  : String
+    - numeroPaginas : Integer
+    - anoPublicacao : Integer
+    - editora       : String
+    - idioma        : String
+    - criadoEm      : LocalDateTime
+    - atualizadoEm  : LocalDateTime
+  }
+
+  class Usuario {
+    - id    : String
+    - nome  : String
+    - email : String
+    - perfil : PerfilUsuario
+  }
+
+  class LogAlteracao {
+    - id        : String
+    - adminId   : String
+    - livroId   : String
+    - acao      : AcaoCatalogo
+    - dadosAntes : String
+    - dadosDepois : String
+    - realizadaEm : LocalDateTime
+  }
+
+  enum PerfilUsuario {
+    LEITOR
+    ADMIN
+  }
+
+  enum AcaoCatalogo {
+    CADASTRO
+    EDICAO
+    REMOCAO
+  }
+
+  Usuario      --> PerfilUsuario  : possui
+  LogAlteracao --> AcaoCatalogo   : classifica
+  LogAlteracao --> Livro          : referencia
+}
+
+' ─────────────────────────────────────────────
+' DELEGAÇÕES: Controller → Guard / Service
+' ─────────────────────────────────────────────
+CatalogoAdminController --> AdminGuard           : protegido por
+CatalogoAdminController --> CatalogoAdminService : delega
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Guard → Repository
+' ─────────────────────────────────────────────
+AdminGuard --> UsuarioRepository : valida perfil via
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Service → Repository
+' ─────────────────────────────────────────────
+CatalogoAdminService --> LivroRepository        : usa
+CatalogoAdminService --> LogAlteracaoRepository : usa
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Repository → Model
+' ─────────────────────────────────────────────
+LivroRepository        ..> Livro          : acessa
+UsuarioRepository      ..> Usuario        : acessa
+LogAlteracaoRepository ..> LogAlteracao   : acessa
+
+
+Controller -[hidden]down- Guard
+Guard      -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+
+@enduml

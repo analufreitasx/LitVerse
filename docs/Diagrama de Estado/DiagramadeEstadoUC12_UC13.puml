@@ -1,0 +1,133 @@
+@startuml US12_US13_RegistroStreakLeitura
+
+title US12 - Registrar Leitura Diaria\nUS13 - Visualizar Sequencia de Leitura (Streak)\nDiagrama de Estados
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+
+skinparam state {
+  BackgroundColor      #E8D5F5
+  BorderColor          #7B2FA8
+  FontColor            #1A0033
+  FontSize             12
+  FontStyle            plain
+  ArrowColor           #5A1A8A
+  ArrowThickness       1.5
+  StartColor           #3D0066
+  EndColor             #3D0066
+  AttributeFontColor   #2D0050
+  AttributeFontSize    11
+}
+
+skinparam note {
+  BackgroundColor #F3E8FF
+  BorderColor     #7B2FA8
+  FontSize        11
+  FontColor       #2D0050
+}
+
+note "**Transicoes principais:**\n[leitor_abre_registro]         -> Registrando Leitura\n[registro_salvo]               -> Streak Atualizada\n[status_EM_RISCO]              -> Streak em Risco\n[status_PERDIDA]               -> Streak Perdida\n[leitor_usa_freeze]            -> Streak Congelada\n[leitor_acessa_painel]         -> Streak Exibida\n[sessao_encerrada]             -> Arquivado" as N1
+
+' ======================================
+'  PONTO DE ENTRADA
+' ======================================
+[*] --> Idle
+
+state Idle {
+  sequenciaAtual : 0
+  statusStreak   : "PERDIDA"
+}
+
+' ======================================
+'  US12 - REGISTRAR LEITURA DIARIA
+' ======================================
+Idle -down-> RegistrandoLeitura : [leitor_abre_registro]\nprepararFormulario()
+
+state RegistrandoLeitura {
+  livroId      : "selecionavel"
+  paginasLidas : "pendente"
+  dataRegistro : "hoje"
+  nota         : "opcional"
+}
+
+RegistrandoLeitura -right-> Idle           : [leitor_cancela]\ncancelarOperacao()
+RegistrandoLeitura -down->  StreakAtualizada : [registro_salvo]\nsalvarRegistroDiario()\nrecalcularStreak()\natualizarProgressoEstante()
+
+state StreakAtualizada {
+  sequenciaAtual     : "recalculada"
+  ultimoRegistro     : "hoje"
+  freezesDisponiveis : "mantidos"
+}
+
+' ======================================
+'  RAMIFICACAO POR STATUS
+' ======================================
+StreakAtualizada -down->  StreakAtiva   : [status_ATIVA]\nnotificarProgresso()
+StreakAtualizada -right-> StreakEmRisco : [status_EM_RISCO]\nenviarLembreteUrgente()
+StreakAtualizada -left->  StreakPerdida : [status_PERDIDA]\nresetarSequencia()
+
+state StreakAtiva {
+  status         : "ATIVA"
+  sequenciaAtual : "> 0"
+  lembreteAtivo  : true
+}
+
+state StreakEmRisco {
+  status        : "EM_RISCO"
+  prazoRegistro : "hoje ate meia-noite"
+  alertaEnviado : true
+}
+
+StreakEmRisco -down->  StreakCongelada : [leitor_usa_freeze]\naplicarFreeze()
+StreakEmRisco -right-> StreakPerdida   : [prazo_expirado]\nresetarSequencia()
+
+state StreakCongelada {
+  status           : "CONGELADA"
+  sequenciaMantida : true
+  freezesUsados    : "+ 1"
+}
+
+StreakCongelada --> StreakAtiva : [novo_registro_no_dia_seguinte]\nrecalcularStreak()
+
+state StreakPerdida {
+  status         : "PERDIDA"
+  sequenciaAtual : 0
+  streakZerada   : true
+}
+
+StreakPerdida --> RegistrandoLeitura : [leitor_reinicia]\nprepararFormulario()
+
+' ======================================
+'  US13 - VISUALIZAR STREAK
+' ======================================
+StreakAtiva     --> StreakExibida : [leitor_acessa_painel]\nbuscarStreakDTO()
+StreakEmRisco   --> StreakExibida : [leitor_acessa_painel]\nbuscarStreakDTO()
+StreakCongelada --> StreakExibida : [leitor_acessa_painel]\nbuscarStreakDTO()
+StreakPerdida   --> StreakExibida : [leitor_acessa_painel]\nbuscarStreakDTO()
+Idle            --> StreakExibida : [leitor_acessa_painel]\nbuscarStreakDTO()
+
+state StreakExibida {
+  sequenciaAtual     : "exibida"
+  maiorSequencia     : "exibida"
+  freezesDisponiveis : "exibidos"
+  diasNoMes          : "calendario visual"
+  statusStreak       : "exibido"
+}
+
+StreakExibida --> RegistrandoLeitura : [leitor_registra_pelo_painel]\nprepararFormulario()
+StreakExibida --> StreakCongelada    : [leitor_usa_freeze_painel]\naplicarFreeze()
+
+' ======================================
+'  ESTADO TERMINAL
+' ======================================
+StreakAtiva   --> Arquivado : [sessao_encerrada]\narquivarEstado()
+StreakExibida --> Arquivado : [sessao_encerrada]\narquivarEstado()
+
+state Arquivado {
+  statusSessao : "arquivada"
+  auditoria    : "registrada"
+}
+
+Arquivado --> [*]
+
+@enduml

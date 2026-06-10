@@ -1,0 +1,323 @@
+@startuml UC14_UC15_UC16_ClubeDoLivro
+
+title UC14 — Criar Clube do Livro\nUC15 — Participar de Clube do Livro\nUC16 — Discutir Capítulos em Grupo\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 11
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 30
+skinparam ranksep 50
+
+' ─────────────────────────────────────────────
+' CAMADA: CONTROLLER
+' ─────────────────────────────────────────────
+package "Controller" <<Rectangle>> {
+
+  package "Controllers" <<Rectangle>> {
+    class ClubeController {
+      - clubeService  : ClubeService
+      - membroService : MembroService
+      + criarClube(dto: CriarClubeDTO) : ResponseEntity
+      + buscarClube(clubeId: String) : ResponseEntity
+      + listarClubesPublicos(pagina: Integer) : ResponseEntity
+      + encerrarClube(clubeId: String, usuarioId: String) : ResponseEntity
+    }
+
+    class MembroController {
+      - membroService : MembroService
+      + entrarNoClube(clubeId: String, usuarioId: String, codigoAcesso: String) : ResponseEntity
+      + sairDoClube(clubeId: String, usuarioId: String) : ResponseEntity
+      + listarMembros(clubeId: String) : ResponseEntity
+      + removerMembro(clubeId: String, membroId: String, adminId: String) : ResponseEntity
+    }
+
+    class DiscussaoController {
+      - discussaoService : DiscussaoService
+      + criarDiscussao(dto: CriarDiscussaoDTO) : ResponseEntity
+      + listarDiscussoes(clubeId: String) : ResponseEntity
+      + adicionarComentario(discussaoId: String, usuarioId: String, texto: String, respondeAId: String) : ResponseEntity
+      + listarComentarios(discussaoId: String, pagina: Integer) : ResponseEntity
+    }
+
+    ClubeController  -[hidden]down- MembroController
+    MembroController -[hidden]down- DiscussaoController
+  }
+
+  package "DTOs" <<Rectangle>> {
+    class CriarClubeDTO {
+      + usuarioId   : String
+      + nome        : String
+      + descricao   : String
+      + livroId     : String
+      + privacidade : PrivacidadeClube
+      + limiteMemb  : Integer
+    }
+
+    class CriarDiscussaoDTO {
+      + usuarioId : String
+      + clubeId   : String
+      + titulo    : String
+      + corpo     : String
+      + capitulo  : Integer
+    }
+
+    CriarClubeDTO -[hidden]down- CriarDiscussaoDTO
+  }
+
+  Controllers -[hidden]right- DTOs
+
+  ClubeController     ..> CriarClubeDTO     : recebe
+  DiscussaoController ..> CriarDiscussaoDTO : recebe
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: SERVICE
+' ─────────────────────────────────────────────
+package "Service" <<Rectangle>> {
+
+  class ClubeService {
+    - clubeRepository    : ClubeRepository
+    - livroRepository    : LivroRepository
+    - membroRepository   : MembroRepository
+    - notificacaoService : NotificacaoService
+    + criarClube(dto: CriarClubeDTO) : Clube
+    + buscarClube(clubeId: String) : Clube
+    + listarClubesPublicos(pagina: Integer) : List<Clube>
+    + encerrarClube(clubeId: String, usuarioId: String) : void
+    - validarAdmin(clubeId: String, usuarioId: String) : void
+  }
+
+  class MembroService {
+    - membroRepository   : MembroRepository
+    - clubeRepository    : ClubeRepository
+    - notificacaoService : NotificacaoService
+    + entrarNoClube(clubeId: String, usuarioId: String, codigoAcesso: String) : MembroClube
+    + sairDoClube(clubeId: String, usuarioId: String) : void
+    + removerMembro(clubeId: String, membroId: String, adminId: String) : void
+    + listarMembros(clubeId: String) : List<MembroClube>
+    - validarVagas(clubeId: String) : void
+    - validarAcessoPrivado(clube: Clube, codigo: String) : void
+  }
+
+  class DiscussaoService {
+    - discussaoRepository  : DiscussaoRepository
+    - comentarioRepository : ComentarioRepository
+    - membroRepository     : MembroRepository
+    - notificacaoService   : NotificacaoService
+    + criarDiscussao(dto: CriarDiscussaoDTO) : Discussao
+    + listarDiscussoes(clubeId: String) : List<Discussao>
+    + adicionarComentario(discussaoId: String, usuarioId: String, texto: String, respondeAId: String) : Comentario
+    + listarComentarios(discussaoId: String, pagina: Integer) : List<Comentario>
+    - validarMembro(clubeId: String, usuarioId: String) : void
+  }
+
+  class NotificacaoService {
+    + enviarNotificacao(usuarioId: String, tipo: TipoNotificacao, payload: dict) : void
+  }
+
+  ClubeService     -[hidden]down- MembroService
+  MembroService    -[hidden]down- DiscussaoService
+  DiscussaoService -[hidden]down- NotificacaoService
+
+  ClubeService     --> NotificacaoService : notifica
+  MembroService    --> NotificacaoService : notifica
+  DiscussaoService --> NotificacaoService : notifica
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: REPOSITORY
+' ─────────────────────────────────────────────
+package "Repository" <<Rectangle>> {
+
+  package "Repos Clube/Membro" <<Rectangle>> {
+    class ClubeRepository {
+      - db : PostgreSQLClient
+      + findById(id: String) : Clube
+      + findPublicos(pagina: Integer) : List<Clube>
+      + findByAdminId(adminId: String) : List<Clube>
+      + save(clube: Clube) : Clube
+      + update(clube: Clube) : Clube
+    }
+
+    class MembroRepository {
+      - db : PostgreSQLClient
+      + findByClubeId(clubeId: String) : List<MembroClube>
+      + findByUsuarioIdEClubeId(usuarioId: String, clubeId: String) : MembroClube
+      + existsByUsuarioIdEClubeId(usuarioId: String, clubeId: String) : Boolean
+      + countByClubeId(clubeId: String) : Integer
+      + save(membro: MembroClube) : MembroClube
+      + delete(id: String) : void
+    }
+
+    ClubeRepository -[hidden]down- MembroRepository
+  }
+
+  package "Repos Discussao/Livro" <<Rectangle>> {
+    class DiscussaoRepository {
+      - db : PostgreSQLClient
+      + findByClubeId(clubeId: String) : List<Discussao>
+      + findById(id: String) : Discussao
+      + save(discussao: Discussao) : Discussao
+      + countByClubeId(clubeId: String) : Integer
+    }
+
+    class ComentarioRepository {
+      - db : PostgreSQLClient
+      + findByDiscussaoId(discussaoId: String, pagina: Integer) : List<Comentario>
+      + findById(id: String) : Comentario
+      + save(comentario: Comentario) : Comentario
+      + delete(id: String) : void
+    }
+
+    class LivroRepository {
+      - db : PostgreSQLClient
+      + findById(id: String) : Livro
+      + findByIsbn(isbn: String) : Livro
+      + save(livro: Livro) : Livro
+    }
+
+    DiscussaoRepository  -[hidden]down- ComentarioRepository
+    ComentarioRepository -[hidden]down- LivroRepository
+  }
+
+  "Repos Clube/Membro" -[hidden]right- "Repos Discussao/Livro"
+}
+
+' ─────────────────────────────────────────────
+' CAMADA: MODEL
+' ─────────────────────────────────────────────
+package "Model" <<Rectangle>> {
+
+  package "Entidades" <<Rectangle>> {
+    class Clube {
+      - id           : String
+      - nome         : String
+      - descricao    : String
+      - adminId      : String
+      - livroId      : String
+      - privacidade  : PrivacidadeClube
+      - codigoAcesso : String
+      - limiteMemb   : Integer
+      - status       : StatusClube
+      - criadoEm     : LocalDateTime
+      - encerradoEm  : LocalDateTime
+    }
+
+    class MembroClube {
+      - id        : String
+      - clubeId   : String
+      - usuarioId : String
+      - papel     : PapelMembro
+      - entradaEm : LocalDateTime
+    }
+
+    class Discussao {
+      - id       : String
+      - clubeId  : String
+      - autorId  : String
+      - titulo   : String
+      - corpo    : String
+      - capitulo : Integer
+      - fixada   : Boolean
+      - criadaEm : LocalDateTime
+    }
+
+    class Comentario {
+      - id          : String
+      - discussaoId : String
+      - autorId     : String
+      - texto       : String
+      - respondeAId : String
+      - criadoEm    : LocalDateTime
+      - editadoEm   : LocalDateTime
+    }
+
+    class Livro {
+      - id            : String
+      - isbn          : String
+      - titulo        : String
+      - autores       : List<String>
+      - capaCoverUrl  : String
+      - numeroPaginas : Integer
+    }
+
+    Clube      -[hidden]right- Discussao
+    Clube      -[hidden]down-  MembroClube
+    Discussao  -[hidden]down-  Comentario
+    Comentario -[hidden]down-  Livro
+  }
+
+  package "Enums" <<Rectangle>> {
+    enum PrivacidadeClube {
+      PUBLICO
+      PRIVADO
+    }
+
+    enum StatusClube {
+      ATIVO
+      ENCERRADO
+    }
+
+    enum PapelMembro {
+      ADMIN
+      MEMBRO
+    }
+
+    PrivacidadeClube -[hidden]right- StatusClube
+    StatusClube      -[hidden]right- PapelMembro
+  }
+
+  "Entidades" -[hidden]down- "Enums"
+
+  Clube       "1" *-- "1..*" MembroClube      : tem
+  Clube       "1" *-- "0..*" Discussao        : contém
+  Clube            -->        Livro            : leitura compartilhada
+  Clube            -->        PrivacidadeClube : define
+  Clube            -->        StatusClube      : possui
+  MembroClube      -->        PapelMembro      : tem
+  Discussao   "1" *-- "0..*" Comentario       : recebe
+}
+
+' ─────────────────────────────────────────────
+' DELEGAÇÕES: Controller → Service
+' ─────────────────────────────────────────────
+ClubeController     --> ClubeService     : delega
+MembroController    --> MembroService    : delega
+DiscussaoController --> DiscussaoService : delega
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Service → Repository
+' ─────────────────────────────────────────────
+ClubeService     --> ClubeRepository      : usa
+ClubeService     --> LivroRepository      : usa
+ClubeService     --> MembroRepository     : usa
+MembroService    --> MembroRepository     : usa
+MembroService    --> ClubeRepository      : usa
+DiscussaoService --> DiscussaoRepository  : usa
+DiscussaoService --> ComentarioRepository : usa
+DiscussaoService --> MembroRepository     : usa
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Repository → Model
+' ─────────────────────────────────────────────
+ClubeRepository      ..> Clube       : acessa
+MembroRepository     ..> MembroClube : acessa
+DiscussaoRepository  ..> Discussao   : acessa
+ComentarioRepository ..> Comentario  : acessa
+LivroRepository      ..> Livro       : acessa
+
+
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+
+@enduml

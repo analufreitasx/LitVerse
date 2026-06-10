@@ -1,0 +1,72 @@
+@startuml US07_US11_MetasLeitura
+
+title US07 – Definir Metas de Leitura\nUS11 – Acompanhar Progresso das Metas\nDiagrama de Estados
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+
+skinparam state {
+  BackgroundColor      #E8D5F5
+  BorderColor          #7B2FA8
+  FontColor            #1A0033
+  FontSize             12
+  FontStyle            plain
+  ArrowColor           #5A1A8A
+  ArrowThickness       1.5
+  StartColor           #3D0066
+  EndColor             #3D0066
+  AttributeFontColor   #2D0050
+  AttributeFontSize    11
+}
+
+skinparam note {
+  BackgroundColor #F3E8FF
+  BorderColor     #7B2FA8
+  FontSize        11
+  FontColor       #2D0050
+}
+
+note "**Transições principais:**\n[leitor_cria_meta]         -> Ativa\n[leitor_pausa]             -> Pausada\n[leitor_retoma]            -> Ativa\n[progresso_atingiu_alvo]   -> Concluída\n[prazo_expirado]           -> Expirada\n[leitor_exclui]            -> Excluída\n[sessao_encerrada]         -> [*]" as N1
+
+' ══════════════════════════════════════
+'  FLUXO PRINCIPAL
+' ══════════════════════════════════════
+[*] --> Ativa : [leitor_cria_meta]\ncriarMeta()
+
+state Ativa {
+  status      : "ATIVA"
+  valorAtual  : "em contagem"
+  percentual  : "calcularPercentual()"
+}
+
+Ativa -down->  Concluida : [progresso_atingiu_alvo]\n[valorAtual >= valorAlvo]\nnotificarConclusao()
+Ativa -right-> Pausada   : [leitor_pausa]\nregistrarPausa()
+Ativa -left->  Expirada  : [prazo_expirado]\n[valorAtual < valorAlvo]\nnotificarExpiracao()
+
+state Pausada {
+  status         : "PAUSADA"
+  progressoSalvo : true
+}
+
+Pausada -up-> Ativa   : [leitor_retoma]\nregistrarRetomada()
+Pausada --> Excluida  : [leitor_exclui]\nexcluirMeta()
+
+state Concluida {
+  status     : "CONCLUIDA"
+  percentual : "100%"
+}
+
+state Expirada {
+  status       : "EXPIRADA"
+  prazoVencido : true
+}
+
+state Excluida {
+  status : "removida"
+}
+
+Concluida --> [*]
+Expirada  --> [*]
+Excluida  --> [*]
+
+@enduml

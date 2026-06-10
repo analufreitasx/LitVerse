@@ -1,0 +1,161 @@
+@startuml UC01_UC06_EstanteLiteraria
+
+title UC01 — Adicionar Livro à Estante\nUC06 — Visualizar Estante Literária\nDiagrama de Classes
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classBackgroundColor #F0EBFF
+skinparam classBorderColor #C4ADEE
+skinparam classFontStyle bold
+skinparam ArrowColor #444444
+skinparam ArrowThickness 1.5
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor #F5F0FF
+skinparam PackageFontSize 12
+skinparam PackageFontStyle bold
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+
+package "Controller" <<Rectangle>> {
+
+  class EstanteController {
+    - adicionarLivroEstanteService : AdicionarLivroEstanteService
+    - visualizarEstanteService     : VisualizarEstanteService
+    + adicionarLivro(usuarioId: String, livroId: String, status: String) : ResponseEntity
+    + visualizarEstante(usuarioId: String, status: String) : ResponseEntity
+    + resumoEstante(usuarioId: String) : ResponseEntity
+  }
+}
+
+
+package "Service" <<Rectangle>> {
+
+  class AdicionarLivroEstanteService {
+    - livroRepository          : LivroRepository
+    - estanteRepository        : EstanteRepository
+    - buscaLivroExternoService : BuscaLivroExternoService
+    + adicionarLivro(usuarioId: String, livroId: String, status: StatusLeitura) : EstanteItem
+    - validarLivroJaNaEstante(estanteId: String, livroId: String) : void
+    - obterOuCadastrarLivro(isbn: String) : Livro
+    - obterOuCriarEstante(usuarioId: String) : Estante
+  }
+
+  class VisualizarEstanteService {
+    - estanteRepository : EstanteRepository
+    - livroRepository   : LivroRepository
+    + buscarEstanteCompleta(usuarioId: String) : Estante
+    + buscarItensPorStatus(usuarioId: String, status: StatusLeitura) : List<EstanteItem>
+    + buscarResumoEstante(usuarioId: String) : Estante
+    - mapearEstante(estante: Estante) : Estante
+  }
+
+  class BuscaLivroExternoService {
+    - googleBooksApiUrl : String
+    + buscarPorIsbn(isbn: String) : Livro
+    + buscarPorTitulo(titulo: String) : List<Livro>
+  }
+
+  AdicionarLivroEstanteService --> BuscaLivroExternoService : usa
+}
+
+package "Repository" <<Rectangle>> {
+
+  class LivroRepository {
+    - db : PostgreSQLClient
+    + findById(id: String) : Livro
+    + findByIsbn(isbn: String) : Livro
+    + findByTitulo(titulo: String) : List<Livro>
+    + save(livro: Livro) : Livro
+  }
+
+  class EstanteRepository {
+    - db : PostgreSQLClient
+    + findByUsuarioId(usuarioId: String) : Estante
+    + findItemByEstanteIdELivroId(estanteId: String, livroId: String) : EstanteItem
+    + saveEstante(estante: Estante) : Estante
+    + saveItem(item: EstanteItem) : EstanteItem
+    + existsItemByEstanteIdELivroId(estanteId: String, livroId: String) : Boolean
+  }
+}
+
+
+package "Model" <<Rectangle>> {
+
+  class Livro {
+    - id            : String
+    - isbn          : String
+    - titulo        : String
+    - autores       : List<String>
+    - generos       : List<String>
+    - sinopse       : String
+    - capaCoverUrl  : String
+    - numeroPaginas : Integer
+    - anoPublicacao : Integer
+    - editora       : String
+    - idioma        : String
+  }
+
+  class Estante {
+    - id           : String
+    - usuarioId    : String
+    - criadaEm     : LocalDateTime
+    - atualizadaEm : LocalDateTime
+    + getItens() : List<EstanteItem>
+    + getTotalLivros() : Integer
+    + getItensPorStatus(status: StatusLeitura) : List<EstanteItem>
+  }
+
+  class EstanteItem {
+    - id            : String
+    - estanteId     : String
+    - livroId       : String
+    - status        : StatusLeitura
+    - progresso     : Integer
+    - dataInicio    : LocalDate
+    - dataConclusao : LocalDate
+    - avaliacao     : Float
+    - resenha       : String
+    - criadoEm      : LocalDateTime
+    - atualizadoEm  : LocalDateTime
+  }
+
+  enum StatusLeitura {
+    LENDO
+    LIDO
+    QUERO_LER
+    ABANDONADO
+  }
+
+  Estante     "1" *-- "0..*" EstanteItem : contém
+  EstanteItem -->            StatusLeitura : usa
+  EstanteItem -->            Livro         : referencia
+}
+
+' ─────────────────────────────────────────────
+' DELEGAÇÕES: Controller → Service
+' ─────────────────────────────────────────────
+EstanteController --> AdicionarLivroEstanteService : delega
+EstanteController --> VisualizarEstanteService     : delega
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Service → Repository
+' ─────────────────────────────────────────────
+AdicionarLivroEstanteService --> LivroRepository   : usa
+AdicionarLivroEstanteService --> EstanteRepository : usa
+VisualizarEstanteService     --> LivroRepository   : usa
+VisualizarEstanteService     --> EstanteRepository : usa
+
+' ─────────────────────────────────────────────
+' DEPENDÊNCIAS: Repository → Model
+' ─────────────────────────────────────────────
+LivroRepository   ..> Livro       : acessa
+EstanteRepository ..> Estante     : acessa
+EstanteRepository ..> EstanteItem : acessa
+
+Controller -[hidden]down- Service
+Service    -[hidden]down- Repository
+Repository -[hidden]down- Model
+
+@enduml

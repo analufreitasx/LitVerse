@@ -1,0 +1,133 @@
+@startuml LitVerse_D1_Estante_Leitura
+
+title LitVerse — D1: Estante & Leitura (UC01, UC02, UC05, UC06)
+
+skinparam backgroundColor #FDFBFF
+skinparam defaultFontSize 11
+skinparam defaultFontName Arial
+
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontStyle bold
+  FontSize 11
+}
+skinparam actor {
+  BackgroundColor #F0EBFF
+  BorderColor #9B72D8
+  FontStyle bold
+  FontSize 11
+}
+skinparam sequence {
+  ArrowColor #6A4CA0
+  ArrowThickness 1.5
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FAF7FF
+  DividerBackgroundColor #EDE5FF
+  DividerBorderColor #C4ADEE
+  GroupBorderColor #9B72D8
+  GroupBackgroundColor #F0EBFF55
+  GroupFontColor #4B2E83
+  GroupFontStyle bold
+}
+skinparam note {
+  BackgroundColor #F5F0FF
+  BorderColor #C4ADEE
+  FontSize 10
+}
+
+actor "Leitor" as U
+
+participant "EstanteController" as EC
+participant "ProgressoLeituraController" as PLC
+participant "ImportacaoController" as IC
+
+participant "EstanteService\n/ VisualizarEstanteService" as ESS
+participant "ProgressoLeituraService" as PLS
+participant "ImportacaoGoodreadsService" as IGS
+participant "BuscaLivroExternoService" as BLE
+
+participant "Banco de Dados\n(PostgreSQL)" as DB
+participant "Google Books API" as GBA
+
+' ═══════════════════════════════════════════════
+' UC01 / UC06 — Adicionar e Visualizar Estante
+' ═══════════════════════════════════════════════
+== UC01 / UC06 — Adicionar Livro e Visualizar Estante ==
+
+autonumber 1
+
+U -> EC : adicionarLivro(usuarioId, livroId, status)
+EC -> ESS : adicionarLivro(usuarioId, livroId, status)
+ESS -> DB : SELECT Livro WHERE isbn=?
+DB --> ESS : null
+ESS -> BLE : buscarPorIsbn(isbn)
+BLE -> GBA : GET /volumes?q=isbn:{isbn}
+GBA --> BLE : dadosLivro
+BLE --> ESS : Livro
+ESS -> DB : INSERT Livro / INSERT EstanteItem
+DB --> ESS : EstanteItem
+ESS --> EC : EstanteItem
+EC --> U : 201 Created — EstanteItem
+
+autonumber 1
+
+U -> EC : visualizarEstante(usuarioId)
+EC -> ESS : buscarEstanteCompleta(usuarioId)
+ESS -> DB : SELECT Estante + EstanteItem JOIN Livro
+DB --> ESS : Estante com itens
+ESS --> EC : Estante
+EC --> U : 200 OK — Estante
+
+' ═══════════════════════════════════════════════
+' UC02 — Atualizar Progresso de Leitura
+' ═══════════════════════════════════════════════
+== UC02 — Atualizar Status e Progresso de Leitura ==
+
+autonumber 1
+
+U -> PLC : atualizarProgresso(usuarioId, dto)
+PLC -> PLS : atualizarProgresso(usuarioId, dto)
+PLS -> DB : SELECT EstanteItem WHERE usuarioId AND livroId
+DB --> PLS : EstanteItem
+PLS -> DB : INSERT HistoricoProgressoLeitura
+DB --> PLS : Historico
+PLS -> DB : UPDATE EstanteItem
+DB --> PLS : EstanteItem
+PLS --> PLC : EstanteItem
+PLC --> U : 200 OK — EstanteItem atualizado
+
+' ═══════════════════════════════════════════════
+' UC05 — Importar Histórico do Goodreads
+' ═══════════════════════════════════════════════
+== UC05 — Importar Histórico do Goodreads ==
+
+autonumber 1
+
+U -> IC : importarHistorico(usuarioId, arquivo.csv)
+IC -> IGS : iniciarImportacao(usuarioId, arquivo)
+IGS -> IGS : parsearCsv(arquivo) → List<GoodreadsRegistro>
+IGS -> DB : INSERT ImportacaoJob{status: PROCESSANDO}
+DB --> IGS : ImportacaoJob
+
+loop para cada registro
+  IGS -> DB : SELECT Livro WHERE isbn=?
+  DB --> IGS : Livro (ou null)
+  opt livro não encontrado
+    IGS -> BLE : buscarPorIsbn(isbn)
+    BLE -> GBA : GET /volumes?q=isbn:{isbn}
+    GBA --> BLE : dadosLivro
+    BLE --> IGS : Livro
+    IGS -> DB : INSERT Livro
+    DB --> IGS : Livro
+  end
+  IGS -> DB : INSERT EstanteItem
+  DB --> IGS : EstanteItem
+end
+
+IGS -> DB : UPDATE ImportacaoJob{status: CONCLUIDO}
+DB --> IGS : ImportacaoJob
+IGS --> IC : ImportacaoResultado
+IC --> U : 200 OK — ImportacaoResultado
+
+@enduml

@@ -1,0 +1,172 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowColor #A389D4
+skinparam sequenceArrowFontColor #000000
+skinparam sequenceArrowFontSize 11
+skinparam participant {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #F0EBFF
+  BorderColor #C4ADEE
+  FontColor #3D2478
+  FontSize 12
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E8DFFF
+  BorderColor #A389D4
+  FontColor #3D2478
+  FontSize 13
+  FontStyle bold
+}
+skinparam sequence {
+  LifeLineBorderColor #C4ADEE
+  LifeLineBackgroundColor #FFFFFF
+  GroupBackgroundColor #FFFFFF
+  GroupBorderColor #A389D4
+  GroupFontColor #000000
+  GroupHeaderFontColor #A389D4
+  DividerBackgroundColor #FFFFFF
+  DividerBorderColor #000000
+  DividerFontColor #000000
+  BoxBackgroundColor #FFFFFF
+  BoxBorderColor #A389D4
+  ActivationBorderColor #7F77DD
+  ActivationBackgroundColor #E8DFFF
+}
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam noteBorderColor #C4ADEE
+skinparam noteBackgroundColor #F0EBFF
+skinparam noteFontColor #3D2478
+
+title UC08 — Configurar Preferências de Leitura
+
+actor Leitor
+participant "App\n(Mobile)" as App
+participant "Preferencias\nController" as Controller
+participant "Preferencias\nService" as Service
+participant "Preferencias\nRepository" as PrefRepo
+participant "Usuario\nRepository" as UserRepo
+participant "Fila Recomendacao\nService" as Fila
+database "PostgreSQL" as DB
+database "Amazon SQS" as SQS
+
+== Configurar Preferências de Leitura ==
+
+Leitor -> App : Acessa tela de preferências
+activate App
+
+App -> Controller : GET /preferencias/{usuarioId}
+activate Controller
+
+Controller -> Service : buscarPreferencias(usuarioId)
+activate Service
+
+Service -> UserRepo : findById(usuarioId)
+activate UserRepo
+UserRepo -> DB : SELECT usuario WHERE id = usuarioId
+activate DB
+DB --> UserRepo : Retorna usuário
+deactivate DB
+UserRepo --> Service : Retorna Usuario
+deactivate UserRepo
+
+alt [usuário não encontrado]
+  Service --> Controller : Lança NotFoundException
+  Controller --> App : 404 Not Found
+  App --> Leitor : Exibe erro de sessão
+  deactivate Service
+  deactivate Controller
+  deactivate App
+
+else [usuário encontrado]
+
+  Service -> PrefRepo : findByUsuarioId(usuarioId)
+  activate PrefRepo
+  PrefRepo -> DB : SELECT preferencias WHERE usuarioId = ?
+  activate DB
+  DB --> PrefRepo : Retorna preferências (ou vazio)
+  deactivate DB
+  PrefRepo --> Service : Retorna PreferenciasLeitura
+  deactivate PrefRepo
+
+  Service --> Controller : Retorna PreferenciasLeitura
+  deactivate Service
+
+  Controller --> App : Exibe formulário com dados atuais
+  deactivate Controller
+
+  Leitor -> App : Seleciona gêneros, idiomas, moods,\nautores e tamanho preferido
+  Leitor -> App : Confirma preferências
+
+  App -> Controller : POST /preferencias/{usuarioId}\n{PreferenciasDTO}
+  activate Controller
+
+  Controller -> Service : salvarPreferencias(usuarioId, dto)
+  activate Service
+
+  Service -> PrefRepo : existsByUsuarioId(usuarioId)
+  activate PrefRepo
+  PrefRepo -> DB : SELECT EXISTS preferencias WHERE usuarioId = ?
+  activate DB
+  DB --> PrefRepo : true / false
+  deactivate DB
+  PrefRepo --> Service : Boolean
+  deactivate PrefRepo
+
+  alt [preferências ainda não existem]
+    Service -> PrefRepo : save(PreferenciasLeitura)
+    activate PrefRepo
+    PrefRepo -> DB : INSERT INTO preferencias (...)
+    activate DB
+    DB --> PrefRepo : Confirma inserção
+    deactivate DB
+    PrefRepo --> Service : Retorna PreferenciasLeitura salva
+    deactivate PrefRepo
+
+  else [preferências já existem]
+    Service -> PrefRepo : update(PreferenciasLeitura)
+    activate PrefRepo
+    PrefRepo -> DB : UPDATE preferencias SET ... WHERE usuarioId = ?
+    activate DB
+    DB --> PrefRepo : Confirma atualização
+    deactivate DB
+    PrefRepo --> Service : Retorna PreferenciasLeitura atualizada
+    deactivate PrefRepo
+  end
+
+  Service -> UserRepo : atualizarPerfilConfigurado(usuarioId, true)
+  activate UserRepo
+  UserRepo -> DB : UPDATE usuario SET perfilConfigurado = true\nWHERE id = usuarioId
+  activate DB
+  DB --> UserRepo : Confirma atualização
+  deactivate DB
+  UserRepo --> Service : OK
+  deactivate UserRepo
+
+  Service -> Fila : enviarEvento(usuarioId, PreferenciasLeitura)
+  activate Fila
+  Fila -> SQS : Publica mensagem com preferências
+  activate SQS
+  SQS --> Fila : Mensagem enfileirada
+  deactivate SQS
+  Fila --> Service : OK
+  deactivate Fila
+
+  Service --> Controller : Retorna PreferenciasLeitura
+  deactivate Service
+
+  Controller --> App : 200 OK — Preferências salvas
+  deactivate Controller
+
+  App --> Leitor : Exibe confirmação e redireciona\npara feed personalizado
+  deactivate App
+
+end
+@enduml
