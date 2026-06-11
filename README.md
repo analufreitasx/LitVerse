@@ -195,16 +195,75 @@ Para melhor visualização e entendimento da estrutura do sistema, os diagramas 
 ## 📂 Estrutura de Pastas
 
 ```
-lifeduo/
-├── .gitignore                     # 🧹 Arquivos não versionados
-├── README.md                      # 📘 Documentação principal
+LitVerse/
+├── .git/                          # 🔗 Repositório Git local
+├── .idea/                         # 💡 Configurações do IntelliJ IDEA
+├── README.md                      # 📘 Documentação principal do projeto
 ├── LICENSE                        # ⚖️ Licença MIT
-├── docker-compose.yml             # 🐳 Orquestração: backend + postgres + redis
-├── /mobile                        # 📱 App React Native (Expo)
-├── /backend                       # 🖥️ API NestJS
-├── /docs                          # 📚 Documentação técnica
-│   ├── /puml                      # 📊 Diagramas PlantUML (.puml)
+├── Logo_Litverse.png              # 🎨 Logo do projeto
+│
+└── docs/                          # 📚 Documentação técnica, diagramas e especificações
+    │
+    ├── 📄 Diagramas principais (nível de sistema)
+    │   ├── Diagrama de Arquitetura.png                # 🏗️ Visão geral da arquitetura do sistema
+    │   ├── Diagrama de Casos de Uso.png               # 🎯 Casos de uso do sistema
+    │   ├── Diagrama de Componentes e Implantação.png  # 🔧 Componentes e implantação em infraestrutura
+    │   ├── DiagramaAtores.png                         # 👥 Atores e tipos de usuários do sistema
+    │   ├── diagramaAtores.puml                        # 📝 Fonte PlantUML do diagrama de atores
+    │   └── casos-de-uso.puml                          # 📝 Fonte PlantUML dos casos de uso
+    │
+    ├── 📂 Diagrama de Classes/                        # 🗂️ Diagramas UML de classes por caso de uso
+    │   ├── UC01_UC06 - DiagramadeClasses.puml         # Autenticação e Consultar Livro
+    │   ├── UC02-DiagramaDeClasses.puml                # Gerenciar Estante
+    │   ├── UC03_UC04 - DiagramaDeClasses.puml         # Escrever Resenha e Avaliações
+    │   ├── UC05-DiagramadeClasses.puml                # Metas de Leitura
+    │   ├── UC07_UC011 - DiagramadeClasses.puml        # Feed Personalizado
+    │   ├── UC08-DiagramadeClasses.puml                # Desafios
+    │   ├── UC09 - DiagramadeClasses.puml              # Gerenciar Comunidades
+    │   ├── UC10 - DiagramadeClasses.puml              # Recomendações
+    │   ├── UC12_UC13 - DiagramadeClasses.puml         # Streaks e Notificações
+    │   ├── UC14_UC15_UC16 - DiagramadeClasses.puml    # Filtros e Exploração
+    │   ├── UC17 - DiagramadeClasses.puml              # Importação de Histórico
+    │   ├── UC18_UC19 - DiagramadeClasses.puml         # Gerenciar Listas Públicas
+    │   ├── UC20 - DiagramadeClasses.puml              # Sincronização
+    │   └── [Arquivos .png correspondentes]
+    │
+    ├── 📂 Diagrama de Estado/                         # 🔄 Diagramas de estado para UC críticos
+    │   ├── DiagramadeEstadoUC1_UC2_UC6.puml           # Estados de autenticação, estante e consulta
+    │   ├── DiagramadeEstadoUC5.puml                   # Estados de metas de leitura
+    │   ├── DiagramadeEstadoUC7_UC11.puml              # Estados do feed e descoberta
+    │   ├── DiagramadeEstadoUC12_UC13.puml             # Estados de notificações e streaks
+    │   └── [Arquivos .png correspondentes]
+    │
+    ├── 📂 Diagramas de Sequencia/                     # 🔀 Diagramas de sequência (interações)
+    │   ├── UC01-DiagramadeSequencia.puml              # Fluxo de autenticação
+    │   ├── UC02-DiagramadeSequencia.puml              # Fluxo de estante
+    │   ├── UC03-DiagramadeSequencia.puml              # Fluxo de resenha
+    │   ├── UC04-DiagramadeSequencia.puml              # Fluxo de avaliações
+    │   ├── UC05-DiagramadeSequencia.puml              # Fluxo de metas
+    │   ├── UC06-DiagramadeSequencia.puml              # Fluxo de consulta de livro
+    │   ├── UC07-DiagramadeSequencia.puml              # Fluxo do feed
+    │   ├── UC08-DiagramadeSequencia.puml              # Fluxo de desafios
+    │   ├── UC09-DiagramadeSequencia.puml              # Fluxo de comunidades
+    │   ├── UC10-DiagramadeSequencia.puml              # Fluxo de recomendações
+    │   ├── ... (UC11 a UC20)
+    │   └── [Arquivos .png correspondentes]
+    │
+    ├── 📂 Diagrama de Comunicação/                    # 💬 Diagramas de comunicação (interações)
+    │   ├── Diagrama de Comunicação P1.puml            # Comunicação entre componentes PT1
+    │   ├── DiagramadeComunicacaoPT2.puml              # Comunicação entre componentes PT2
+    │   ├── DiagramadeComunicacaoPT3.puml              # Comunicação entre componentes PT3
+    │   ├── DiagramadeComunicacaoPT4.puml              # Comunicação entre componentes PT4
+    │   └── [Arquivos .png correspondentes]
+    │
+    └── 📂 Modelo de Dados/                            # 💾 Diagramas de dados e banco de dados
+        ├── ModeloDeDados.puml                         # Diagrama ER do banco de dados
+        └── ModeloDeDados.png                          # Visualização do modelo de dados
 ```
+
+### 📋 Descrição das Pastas
+
+- **docs/** — Centraliza toda a documentação técnica do projeto, incluindo diagramas UML, especificações de design, modelos de dados e fluxos de interação gerados com PlantUML.
 
 ---
 
